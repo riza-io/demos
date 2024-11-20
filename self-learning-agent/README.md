@@ -25,6 +25,9 @@ After that, you can run `npm start` to start the agent.
 
 ## Getting started with the agent
 
+> [!NOTE]
+> As with any LLM-generated responses, there is variation between runs, and the agent may occasionally produce invalid code. Even if you use the same prompts, the output you receive may not be identical to the examples below.
+
 The agent receives a system prompt when it starts up (which will be printed for you to see). It will then ask you for first prompt.
 
 ### "help me create a new stripe customer"
