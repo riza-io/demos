@@ -10,24 +10,12 @@ import {
   SHOW_OPTIONS_TOOL,
 } from './toolUtils'
 import { SYSTEM_PROMPT } from './toolUtils'
+import { HTTP_AUTH_CONFIG } from './credentials'
 
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
 })
-
-/**
- * The Riza API allows you to securely authenticate API requests, so your agent does not have access to your secrets.
- * See the docs for more info: https://docs.riza.io/reference/http
- */
-const HTTP_AUTH_CONFIG: Riza.ToolExecParams.HTTP = {
-  allow: [
-    {
-      host: 'api.stripe.com',
-      auth: { bearer: { token: process.env.STRIPE_TESTMODE_API_KEY } },
-    },
-  ],
-}
 
 const printMessage = (...messages: unknown[]) => {
   console.log(...messages)
@@ -72,7 +60,11 @@ export class SelfLearningAgent {
       input,
       http: HTTP_AUTH_CONFIG,
     })
-    printMessage('Me: [Tool result]', response.output)
+    if (response.execution.exit_code !== 0) {
+      return {
+        error: response.execution.stderr,
+      }
+    }
     return response.output
   }
 
@@ -128,8 +120,6 @@ export class SelfLearningAgent {
   }
 
   async handleToolResponse(response: Anthropic.Messages.ToolUseBlock) {
-    printMessage('Assistant: [Tool use]', response.name, response.input)
-
     // We have three hardcoded tools. The rest are written by the agent and executed on Riza.
     if (response.name === CREATE_TOOL_TOOL.name) {
       const tool = await this.createTool(response)

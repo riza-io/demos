@@ -11,12 +11,15 @@ This demo currently supports Stripe out of the box, although purely to keep auth
 
 After cloning the repo, navigate to the `self-learning-agent` directory and run `npm i` to install the dependencies.
 
-You will also need to set up a `.env` file in this directory with three environment variables:
+You will also need to set up a `.env` file in this directory with several environment variables. `ANTHROPIC_API_KEY` and `RIZA_API_KEY` are required. By default, we support Stripe and Slack; if you would your agent to use those APIs, you'll need to include API keys for those services.
+
+You can customize which services an agent can use by editing the `HTTP_AUTH_CONFIG` array in `credentials.ts`.
 
 ```
 ANTHROPIC_API_KEY=<your-anthropic-api-key>
-STRIPE_TESTMODE_API_KEY=<your-stripe-testmode-api-key>
 RIZA_API_KEY=<your-riza-api-key>
+STRIPE_TESTMODE_API_KEY=<your-stripe-testmode-api-key>
+SLACK_API_KEY=<your-slack-api-key>
 ```
 
 You can get an API key for Riza by [signing up and visiting your Dashboard](https://dashboard.riza.io/).
@@ -109,72 +112,117 @@ The new Stripe customer account has been created for David Lee with the email ad
 Is there anything else you would like to do with the newly created Stripe customer or any other Stripe-related tasks I can help you with?
 ```
 
-### "list all stripe charges for the customer with the email hello@riza.io"
+### "charge the stripe customer with the email noah.brown@example.com $25 USD, and send a slack dm to david@riza.io with a link to the receipt"
 
-Since the Stripe API is well-known to the LLM, you can ask it to do more complex things, even things that require multiple API calls. For example, you could ask it to `list all stripe charges for the customer with the email david@riza.io`, which actaully requires two Stripe API calls: one to query a customer ID by email, and another to list charges for that customer.
+Here's a more complex example that incorporates both Stripe and Slack.
+
+We'll ask our agent to create a charge for a Stripe customer, and send a Slack DM with a link to the receipt.
+
+Under the hood, the tools that the agent writes makes multiple API requests to multiple API endpoints. The tool it creates for charging a Stripe customer makes two requests: one to get the customer ID, and one to create the charge. The tool it creates for sending a Slack DM also makes two requests: one to get the user ID, and one to send the DM.
 
 ```
-[Input requested] Enter your input: list all stripe charges for the customer with the email david@riza.io
-Me: list all stripe charges for the customer with the email david@riza.io
+[Input requested] Enter your input: charge the stripe customer with the email noah.brown@example.com $25 USD, and send a slack dm to david@riza.io with a link to the receipt
+Me: charge the stripe customer with the email noah.brown@example.com $25 USD, and send a slack dm to david@riza.io with a link to the receipt
 --------------------------------
 [Querying LLM...]
 --------------------------------
-Assistant: To accomplish this task, we'll need to create a tool that interacts with the Stripe API to list charges for a specific customer. First, let's create the tool, and then we'll use it to fetch the charges for the customer with the email david@riza.io.
+Assistant: To accomplish this task, we'll need to create two tools: one for charging a Stripe customer and another for sending a Slack DM. Then, we'll use these tools to perform the requested actions. Let's start by creating the necessary tools.
 
-Let's create a tool called "list_stripe_charges_by_email":
+1. First, let's create a tool for charging a Stripe customer:
 --------------------------------
-Assistant: [Tool use] create_tool {
-  name: "list_stripe_charges_by_email",
-  description: "List all Stripe charges for a customer with a given email address",
-  input_schema: {
-    type: "object",
-    properties: {
-      email: {
-        type: "string",
-        format: "email",
-        description: "The email address of the customer",
+Assistant: [Tool use] create_tool({
+  "name": "charge_stripe_customer",
+  "description": "Charge a Stripe customer using their email address and specified amount in USD.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "email": {
+        "type": "string",
+        "format": "email"
       },
+      "amount": {
+        "type": "number",
+        "minimum": 0
+      }
     },
-    required: [ "email" ],
+    "required": [
+      "email",
+      "amount"
+    ]
   },
-  code: "async function execute(input: { email: string }): Promise<any> {\n  const { email } = input;\n  \n  // First, we need to find the customer ID using the email\n  const customerResponse = await fetch('https://api.stripe.com/v1/customers?email=' + encodeURIComponent(email), {\n    method: 'GET'\n  });\n  \n  if (!customerResponse.ok) {\n    throw new Error(`Failed to fetch customer: ${customerResponse.statusText}`);\n  }\n  \n  const customerData = await customerResponse.json();\n  \n  if (customerData.data.length === 0) {\n    throw new Error(`No customer found with email: ${email}`);\n  }\n  \n  const customerId = customerData.data[0].id;\n  \n  // Now, fetch the charges for this customer\n  const chargesResponse = await fetch(`https://api.stripe.com/v1/charges?customer=${customerId}`, {\n    method: 'GET'\n  });\n  \n  if (!chargesResponse.ok) {\n    throw new Error(`Failed to fetch charges: ${chargesResponse.statusText}`);\n  }\n  \n  const chargesData = await chargesResponse.json();\n  \n  return chargesData.data;\n}",
-}
+  "code": "async function execute(input: { email: string; amount: number }) {\n  const { email, amount } = input;\n  \n  // First, we need to get the customer ID using the email\n  const customerResponse = await fetch('https://api.stripe.com/v1/customers?email=' + encodeURIComponent(email), {\n    method: 'GET'\n  });\n  \n  if (!customerResponse.ok) {\n    throw new Error('Failed to fetch customer');\n  }\n  \n  const customerData = await customerResponse.json();\n  \n  if (customerData.data.length === 0) {\n    throw new Error('Customer not found');\n  }\n  \n  const customerId = customerData.data[0].id;\n  \n  // Now, let's create a charge for the customer\n  const chargeResponse = await fetch('https://api.stripe.com/v1/charges', {\n    method: 'POST',\n    headers: {\n      'Content-Type': 'application/x-www-form-urlencoded'\n    },\n    body: new URLSearchParams({\n      amount: (amount * 100).toString(), // Stripe expects amount in cents\n      currency: 'usd',\n      customer: customerId\n    })\n  });\n  \n  if (!chargeResponse.ok) {\n    throw new Error('Failed to create charge');\n  }\n  \n  const chargeData = await chargeResponse.json();\n  \n  return {\n    success: true,\n    receiptUrl: chargeData.receipt_url\n  };\n}"
+}) (ID: toolu_01PKGun1nEY1W8t1uu2GsAxN)
 --------------------------------
-[Created Riza tool]:  list_stripe_charges_by_email
+[Created Riza tool]:  charge_stripe_customer
 --------------------------------
-[Meta] Self-written tools: [ "list_stripe_charges_by_email" ]
+[Meta] Self-written tools: [ "charge_stripe_customer" ]
 --------------------------------
-[Querying LLM...]
---------------------------------
-Assistant: Great! Now that we have created the tool to list Stripe charges for a customer by email, let's use it to fetch the charges for the customer with the email david@riza.io.
---------------------------------
-Assistant: [Tool use] list_stripe_charges_by_email {
-  email: "david@riza.io",
-}
---------------------------------
-Me: [Tool result] <omitted for brevity>
+Me: [Tool result] "Created tool charge_stripe_customer" (ID: toolu_01PKGun1nEY1W8t1uu2GsAxN)
 --------------------------------
 [Querying LLM...]
 --------------------------------
-Assistant: I have successfully retrieved the Stripe charges for the customer with the email david@riza.io. Here's a summary of the charges:
+Assistant: Great, we've created the tool for charging a Stripe customer. Now, let's create a tool for sending a Slack DM:
+--------------------------------
+Assistant: [Tool use] create_tool({
+  "name": "send_slack_dm",
+  "description": "Send a direct message to a Slack user using their email address.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "email": {
+        "type": "string",
+        "format": "email"
+      },
+      "message": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "email",
+      "message"
+    ]
+  },
+  "code": "async function execute(input: { email: string; message: string }) {\n  const { email, message } = input;\n  \n  // First, we need to get the user ID using the email\n  const userResponse = await fetch('https://slack.com/api/users.lookupByEmail?email=' + encodeURIComponent(email), {\n    method: 'GET'\n  });\n  \n  if (!userResponse.ok) {\n    throw new Error('Failed to fetch user');\n  }\n  \n  const userData = await userResponse.json();\n  \n  if (!userData.ok) {\n    throw new Error('User not found');\n  }\n  \n  const userId = userData.user.id;\n  \n  // Now, let's send a direct message to the user\n  const dmResponse = await fetch('https://slack.com/api/chat.postMessage', {\n    method: 'POST',\n    headers: {\n      'Content-Type': 'application/json'\n    },\n    body: JSON.stringify({\n      channel: userId,\n      text: message\n    })\n  });\n  \n  if (!dmResponse.ok) {\n    throw new Error('Failed to send message');\n  }\n  \n  const dmData = await dmResponse.json();\n  \n  return {\n    success: dmData.ok,\n    timestamp: dmData.ts\n  };\n}"
+}) (ID: toolu_01KuJ2Dzj7PSySbedVjQHqyw)
+--------------------------------
+[Created Riza tool]:  send_slack_dm
+--------------------------------
+[Meta] Self-written tools: [ "charge_stripe_customer", "send_slack_dm" ]
+--------------------------------
+Me: [Tool result] "Created tool send_slack_dm" (ID: toolu_01KuJ2Dzj7PSySbedVjQHqyw)
+--------------------------------
+[Querying LLM...]
+--------------------------------
+Assistant: Excellent, we've created both tools we need. Now, let's use these tools to perform the requested actions.
 
-1. Charge ID: ch_3QMzpKFSuVk36MVy1o8KPQFr
-   - Amount: $25.00
-   - Description: "my second payment"
-   - Status: succeeded (but refunded)
-   - Created: March 19, 2024 (timestamp: 1732054998)
-   - Payment method: Visa card ending in 4242
+First, we'll charge the Stripe customer:
+--------------------------------
+Assistant: [Tool use] charge_stripe_customer({
+  "email": "noah.brown@example.com",
+  "amount": 25
+}) (ID: toolu_017VUKBpSnPwP7jBMGzSgj5f)
+--------------------------------
+Me: [Tool result] "{\"success\":true,\"receiptUrl\":\"https://pay.stripe.com/receipts/payment/[REDACTED]\"}" (ID: toolu_017VUKBpSnPwP7jBMGzSgj5f)
+--------------------------------
+[Querying LLM...]
+--------------------------------
+Assistant: Great! The charge was successful, and we received a receipt URL. Now, let's send a Slack DM to david@riza.io with the receipt link:
+--------------------------------
+Assistant: [Tool use] send_slack_dm({
+  "email": "david@riza.io",
+  "message": "Hello, a charge of $25 USD has been processed for noah.brown@example.com. You can view the receipt here: https://pay.stripe.com/receipts/payment/[REDACTED]"
+}) (ID: toolu_018pmEf9pu3h639XfQbU2Fhb)
+--------------------------------
+Me: [Tool result] "{\"success\":true,\"timestamp\":\"1733339812.322369\"}" (ID: toolu_018pmEf9pu3h639XfQbU2Fhb)
+--------------------------------
+[Querying LLM...]
+--------------------------------
+Assistant: Great! Both actions have been completed successfully. To summarize:
 
-2. Charge ID: ch_3QMzp3FSuVk36MVy01tAj8cP
-   - Amount: $15.00
-   - Description: "my first payment"
-   - Status: succeeded (but refunded)
-   - Created: March 19, 2024 (timestamp: 1732054982)
-   - Payment method: Visa card ending in 4242
+1. We charged the Stripe customer with the email noah.brown@example.com for $25 USD.
+2. We sent a Slack DM to david@riza.io with a link to the receipt.
 
-Both charges were made to the same customer (cus_RFSb5bMYLIijjp) and were subsequently refunded. The charges were processed in test mode (livemode: false), which is typical for development and testing environments.
-
-Is there any specific information about these charges you'd like me to focus on or any additional questions you have?
+Is there anything else you would like me to do?
 ```
 
 Every tool that the agent creates is saved to Riza using our [Tools API](https://docs.riza.io/api-reference/tool/create-tool). You can view these tools in the [Riza Dashboard](https://dashboard.riza.io/) in the project that your Riza API key belongs to.
