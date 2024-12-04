@@ -29,6 +29,11 @@ const HTTP_AUTH_CONFIG: Riza.ToolExecParams.HTTP = {
   ],
 }
 
+const printMessage = (...messages: unknown[]) => {
+  console.log(...messages)
+  console.log('--------------------------------')
+}
+
 export class SelfLearningAgent {
   messages: Anthropic.Messages.MessageParam[] = []
   rizaTools: Record<
@@ -67,7 +72,7 @@ export class SelfLearningAgent {
       input,
       http: HTTP_AUTH_CONFIG,
     })
-    console.log('[Executed Riza tool]: ', name, response.output)
+    printMessage('Me: [Tool result]', response.output)
     return response.output
   }
 
@@ -93,8 +98,8 @@ export class SelfLearningAgent {
       rizaDefinition: newRizaTool,
       claudeDefinition: formatRizaToolForClaude(newRizaTool),
     }
-    console.log('[Created Riza tool]: ', newRizaTool.name)
-    console.log('[Meta] Self-written tools:', Object.keys(this.rizaTools))
+    printMessage('[Created Riza tool]: ', newRizaTool.name)
+    printMessage('[Meta] Self-written tools:', Object.keys(this.rizaTools))
     return newRizaTool
   }
 
@@ -113,17 +118,17 @@ export class SelfLearningAgent {
    * Shows a list of options to the user and returns the index of the selected option.
    */
   async showOptions(tool: Anthropic.Messages.ToolUseBlock) {
-    console.log('Choose one of the following options:')
+    printMessage('Choose one of the following options:')
     const options = (tool.input as { options: string[] }).options
     for (let i = 0; i < options.length; i++) {
-      console.log(`${i}: ${options[i]}`)
+      printMessage(`${i}: ${options[i]}`)
     }
     const response = await this.requestUserInput()
     return parseInt(response)
   }
 
   async handleToolResponse(response: Anthropic.Messages.ToolUseBlock) {
-    console.log('[Calling tool]: ', response.name, response.input)
+    printMessage('Assistant: [Tool use]', response.name, response.input)
 
     // We have three hardcoded tools. The rest are written by the agent and executed on Riza.
     if (response.name === CREATE_TOOL_TOOL.name) {
@@ -198,13 +203,9 @@ export class SelfLearningAgent {
       const renderedContent = renderContent(message.content)
       for (const line of renderedContent) {
         if (message.role === 'user') {
-          console.log('--------------------------------')
-          console.log('Me: ', line)
-          console.log('--------------------------------')
+          printMessage('Me:', line)
         } else {
-          console.log('--------------------------------')
-          console.log('Assistant: ', line)
-          console.log('--------------------------------')
+          printMessage('Assistant:', line)
         }
       }
     }
@@ -215,7 +216,7 @@ export class SelfLearningAgent {
   }
 
   async callLLM() {
-    console.log('[Querying LLM...]')
+    printMessage('[Querying LLM...]')
     const response = await anthropic.messages.create({
       model: 'claude-3-5-sonnet-20240620',
       max_tokens: 1024,
@@ -240,7 +241,7 @@ export class SelfLearningAgent {
   }
 
   async loop() {
-    console.log('Starting loop')
+    printMessage('Starting loop')
 
     while (true) {
       if (this.requiresUserPrompt) {

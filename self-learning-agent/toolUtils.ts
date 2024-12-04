@@ -91,11 +91,11 @@ export const renderContent = (content: Anthropic.Messages.MessageParam['content'
   const renderedContent: string[] = []
   for (const block of content) {
     if (block.type === 'tool_use') {
-      renderedContent.push(`[Tool use] ${block.name} (ID: ${block.id})`)
+      // Tool use params are printed when we execute the tool
     } else if (block.type === 'text') {
       renderedContent.push(block.text)
     } else if (block.type === 'tool_result') {
-      renderedContent.push(`[Tool result] ${block.content} (ID: ${block.tool_use_id})`)
+      // Tool result is printed when we receive the tool execution result
     } else {
       continue // image blocks not supported in this demo
     }
