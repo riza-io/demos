@@ -17,7 +17,9 @@ You must also write the \`input_schema\` for the tool, which must be a valid JSO
 
 The \`input\` argument passed to the \`execute\` function will match the schema of the \`input_schema\` of the tool.
 
-If you write a tool that uses an external API, you must make plain HTTP requests to the API, using only the node fetch library. You can assume that any authentication is handled outside of the tool, and does not need to be handled in the tool.
+If you write a tool that uses an external API, you must make plain HTTP requests to the API, using only the node fetch library. You can assume that any header-based authentication is handled outside of the tool via an http proxy, so you do not need to add authentication headers to the request.
+
+Your tools may require making multiple HTTP requests to different APIs, for example if you need to query an API to get an ID first.
 
 When executing tools, you should use the \`request_user_input\` tool to request user input if you need to.`
 
@@ -91,11 +93,15 @@ export const renderContent = (content: Anthropic.Messages.MessageParam['content'
   const renderedContent: string[] = []
   for (const block of content) {
     if (block.type === 'tool_use') {
-      // Tool use params are printed when we execute the tool
+      renderedContent.push(
+        `[Tool use] ${block.name}(${JSON.stringify(block.input, null, 2)}) (ID: ${block.id})`,
+      )
     } else if (block.type === 'text') {
       renderedContent.push(block.text)
     } else if (block.type === 'tool_result') {
-      // Tool result is printed when we receive the tool execution result
+      renderedContent.push(
+        `[Tool result] ${JSON.stringify(block.content, null, 2)} (ID: ${block.tool_use_id})`,
+      )
     } else {
       continue // image blocks not supported in this demo
     }
