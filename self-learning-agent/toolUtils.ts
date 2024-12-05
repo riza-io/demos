@@ -1,5 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk'
-import Riza from '@riza-io/api'
+import Anthropic from "@anthropic-ai/sdk";
+import Riza from "@riza-io/api";
 
 export const SYSTEM_PROMPT = `You are an autonomous agent that can create tools to perform tasks. You can write Typescript code to create tools. You can also use the tools you have created to perform tasks.
 
@@ -21,90 +21,94 @@ If you write a tool that uses an external API, you must make plain HTTP requests
 
 Your tools may require making multiple HTTP requests to different APIs, for example if you need to query an API to get an ID first.
 
-When executing tools, you should use the \`request_user_input\` tool to request user input if you need to.`
+When executing tools, you should use the \`request_user_input\` tool to request user input if you need to.`;
 
 export const CREATE_TOOL_TOOL: Anthropic.Messages.Tool = {
-  name: 'create_tool',
+  name: "create_tool",
   description:
-    'Create a new tool. This tool will be used to create new tools. You can use the tools you have created to perform tasks.',
+    "Create a new tool. This tool will be used to create new tools. You can use the tools you have created to perform tasks.",
   input_schema: {
-    type: 'object',
+    type: "object",
     properties: {
       name: {
-        type: 'string',
+        type: "string",
         description:
-          'The name of the tool you are writing. This is what you will use to call the tool.',
+          "The name of the tool you are writing. This is what you will use to call the tool.",
       },
       description: {
-        type: 'string',
+        type: "string",
         description:
-          'A description of the tool you are writing. This will help you or other agents or people pick the appropriate tool in the future.',
+          "A description of the tool you are writing. This will help you or other agents or people pick the appropriate tool in the future.",
       },
       code: {
-        type: 'string',
+        type: "string",
         description:
-          'The Typescript code for the tool you are writing. The code should be a valid Typescript function named `execute` that takes one argument called `input`. When called, the `input` provided will match the schema of the `input_schema` of the tool.',
+          "The Typescript code for the tool you are writing. The code should be a valid Typescript function named `execute` that takes one argument called `input`. When called, the `input` provided will match the schema of the `input_schema` of the tool.",
       },
       input_schema: {
-        type: 'object',
+        type: "object",
         description:
-          'The input schema for the tool. This must be provided as a valid JSON Schema object.',
+          "The input schema for the tool. This must be provided as a valid JSON Schema object.",
       },
     },
   },
-}
+};
 
 export const REQUEST_USER_INPUT_TOOL: Anthropic.Messages.Tool = {
-  name: 'request_user_input',
-  description: 'Request user input. The tool will respond with the user input.',
+  name: "request_user_input",
+  description: "Request user input. The tool will respond with the user input.",
   input_schema: {
-    type: 'object',
+    type: "object",
     properties: {},
   },
-}
+};
 
 export const SHOW_OPTIONS_TOOL: Anthropic.Messages.Tool = {
-  name: 'show_options',
+  name: "show_options",
   description:
     "Show the user a list of options to choose from as a numbered list starting from 0, corresponding to the index of the option in the list. Returns the user's choice.",
   input_schema: {
-    type: 'object',
+    type: "object",
     properties: {
       options: {
-        type: 'array',
-        items: { type: 'string' },
+        type: "array",
+        items: { type: "string" },
       },
     },
   },
-}
+};
 
-export const formatRizaToolForClaude = (tool: Riza.Tool): Anthropic.Messages.Tool => {
+export const formatRizaToolForClaude = (
+  tool: Riza.Tool,
+): Anthropic.Messages.Tool => {
   return {
     name: tool.name,
     description: tool.description,
     input_schema: tool.input_schema as Anthropic.Messages.Tool.InputSchema,
-  }
-}
+  };
+};
 
-export const renderContent = (content: Anthropic.Messages.MessageParam['content']): string[] => {
-  if (typeof content === 'string') {
-    return [content]
+export const renderContent = (
+  content: Anthropic.Messages.MessageParam["content"],
+): string[] => {
+  if (typeof content === "string") {
+    return [content];
   }
-  const renderedContent: string[] = []
+  const renderedContent: string[] = [];
   for (const block of content) {
-    if (block.type === 'tool_use') {
+    if (block.type === "tool_use") {
       renderedContent.push(
         `[Tool use] ${block.name}(${JSON.stringify(block.input, null, 2)}) (ID: ${block.id})`,
-      )
-    } else if (block.type === 'text') {
-      renderedContent.push(block.text)
-    } else if (block.type === 'tool_result') {
+      );
+    } else if (block.type === "text") {
+      renderedContent.push(block.text);
+    } else if (block.type === "tool_result") {
       renderedContent.push(
         `[Tool result] ${JSON.stringify(block.content, null, 2)} (ID: ${block.tool_use_id})`,
-      )
+      );
     } else {
-      continue // image blocks not supported in this demo
+      continue; // image blocks not supported in this demo
     }
   }
-  return renderedContent
-}
+  return renderedContent;
+};

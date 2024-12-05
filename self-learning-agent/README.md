@@ -34,6 +34,7 @@ After that, you can run `npm start` to start the agent.
 The agent receives a system prompt when it starts up (which will be printed for you to see). It will then ask you for first prompt.
 
 ### "help me create a new stripe customer"
+
 Since it has access to a Stripe key, you can ask it to operate on your Stripe account. For example, you could ask it to `help me create a new stripe customer`:
 
 ```
