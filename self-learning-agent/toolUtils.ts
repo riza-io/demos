@@ -21,6 +21,8 @@ If you write a tool that uses an external API, you must make plain HTTP requests
 
 Your tools may require making multiple HTTP requests to different APIs, for example if you need to query an API to get an ID first.
 
+When possible, your tools should return JSON objects rather than formatted strings.
+
 When executing tools, you should use the \`request_user_input\` tool to request user input if you need to.`;
 
 export const CREATE_TOOL_TOOL: Anthropic.Messages.Tool = {
@@ -66,7 +68,7 @@ export const REQUEST_USER_INPUT_TOOL: Anthropic.Messages.Tool = {
 export const SHOW_OPTIONS_TOOL: Anthropic.Messages.Tool = {
   name: "show_options",
   description:
-    "Show the user a list of options to choose from as a numbered list starting from 0, corresponding to the index of the option in the list. Returns the user's choice.",
+    "Show the user a list of options to choose from as a numbered list starting from 0, corresponding to the index of the option in the list. Returns the user's choice, which will be the index of the option they choose.",
   input_schema: {
     type: "object",
     properties: {

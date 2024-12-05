@@ -23,13 +23,23 @@ const printMessage = (...messages: unknown[]) => {
   console.log("--------------------------------");
 };
 
+type RizaToolDefinition = {
+  execute: (input: any) => Promise<any>;
+  claudeDefinition: Anthropic.Messages.Tool;
+  rizaToolDefinition: Riza.Tool;
+};
+
+type HardCodedToolDefinition = {
+  execute: (input: any) => Promise<any>;
+  claudeDefinition: Anthropic.Messages.Tool;
+};
+
+type ToolDefinition = RizaToolDefinition | HardCodedToolDefinition;
+
 export class SelfLearningAgent {
   messages: Anthropic.Messages.MessageParam[] = [];
-  rizaTools: Record<
-    string,
-    { rizaDefinition: Riza.Tool; claudeDefinition: Anthropic.Messages.Tool }
-  > = {};
   requiresUserPrompt = true;
+  tools: Record<string, ToolDefinition> = {};
 
   constructor() {
     this.messages = [
@@ -39,6 +49,34 @@ export class SelfLearningAgent {
       },
     ];
     console.log("System prompt:", SYSTEM_PROMPT);
+
+    // We only provide a few tools out of the box. The agent will write the rest!
+    this.tools = {
+      [CREATE_TOOL_TOOL.name]: {
+        execute: this.handleCreateTool.bind(this),
+        claudeDefinition: CREATE_TOOL_TOOL,
+      },
+      [REQUEST_USER_INPUT_TOOL.name]: {
+        execute: this.handleRequestUserInput.bind(this),
+        claudeDefinition: REQUEST_USER_INPUT_TOOL,
+      },
+      [SHOW_OPTIONS_TOOL.name]: {
+        execute: this.handleShowOptions.bind(this),
+        claudeDefinition: SHOW_OPTIONS_TOOL,
+      },
+    };
+  }
+
+  registerRizaTool(tool: Riza.Tool) {
+    if (this.tools[tool.name]) {
+      throw new Error(`Tool ${tool.name} already exists`);
+    }
+
+    this.tools[tool.name] = {
+      execute: this.createRizaToolExecuteFn(tool).bind(this),
+      claudeDefinition: formatRizaToolForClaude(tool),
+      rizaToolDefinition: tool,
+    };
   }
 
   async load(path: string) {
@@ -52,52 +90,49 @@ export class SelfLearningAgent {
     );
 
     for (const tool of tools) {
-      this.rizaTools[tool.name] = {
-        rizaDefinition: tool,
-        claudeDefinition: formatRizaToolForClaude(tool),
-      };
+      this.registerRizaTool(tool);
     }
   }
 
   getToolsForClaude(): Anthropic.Messages.Tool[] {
-    // We only provide three tools out of the box. The agent will write the rest!
-    return [
-      CREATE_TOOL_TOOL,
-      REQUEST_USER_INPUT_TOOL,
-      SHOW_OPTIONS_TOOL,
-      ...Object.values(this.rizaTools).map((tool) => tool.claudeDefinition),
-    ];
+    return Object.values(this.tools).map((tool) => tool.claudeDefinition);
   }
 
   /**
    * Uses the Riza API to execute a tool.
    * https://docs.riza.io/api-reference/tool/execute-tool
    */
-  async executeRizaTool(name: string, input: unknown) {
-    const rizaTool = this.rizaTools[name].rizaDefinition;
-    const response = await riza.tools.exec(rizaTool.id, {
-      input,
-      http: HTTP_AUTH_CONFIG,
-    });
-    if (response.execution.exit_code !== 0) {
-      return {
-        error: response.execution.stderr,
-      };
-    }
-    return response.output;
+  createRizaToolExecuteFn(rizaToolDefinition: Riza.Tool) {
+    return async (input: unknown) => {
+      const response = await riza.tools.exec(rizaToolDefinition.id, {
+        input,
+        http: HTTP_AUTH_CONFIG,
+      });
+      if (response.execution.exit_code !== 0) {
+        return {
+          error: response.execution.stderr,
+        };
+      }
+      return response.output;
+    };
+  }
+
+  getRizaTools(): RizaToolDefinition[] {
+    return Object.values(this.tools).filter(
+      (tool): tool is RizaToolDefinition => "rizaToolDefinition" in tool,
+    );
   }
 
   /**
    * Creates a new tool using the Riza API.
    * https://docs.riza.io/api-reference/tool/create-tool
    */
-  async createTool(tool: Anthropic.Messages.ToolUseBlock) {
-    const input = tool.input as {
-      name: string;
-      description: string;
-      code: string;
-      input_schema: Record<string, unknown>;
-    };
+  async handleCreateTool(input: {
+    name: string;
+    description: string;
+    code: string;
+    input_schema: Record<string, unknown>;
+  }) {
     const newRizaTool = await riza.tools.create({
       name: input.name,
       description: input.description,
@@ -105,19 +140,19 @@ export class SelfLearningAgent {
       input_schema: input.input_schema,
       language: "TYPESCRIPT",
     });
-    this.rizaTools[newRizaTool.name] = {
-      rizaDefinition: newRizaTool,
-      claudeDefinition: formatRizaToolForClaude(newRizaTool),
-    };
+    this.registerRizaTool(newRizaTool);
     printMessage("[Created Riza tool]: ", newRizaTool.name);
-    printMessage("[Meta] Self-written tools:", Object.keys(this.rizaTools));
-    return newRizaTool;
+    printMessage(
+      "[Meta] Self-written tools:",
+      this.getRizaTools().map((tool) => tool.rizaToolDefinition.name),
+    );
+    return `Created tool: ${newRizaTool.name}`;
   }
 
   /**
    * Requests user input from the console.
    */
-  async requestUserInput() {
+  async handleRequestUserInput() {
     return new Promise<string>((resolve) => {
       rl.question("[Input requested] Enter your input: ", (input) => {
         if (input === "save") {
@@ -132,67 +167,34 @@ export class SelfLearningAgent {
   /**
    * Shows a list of options to the user and returns the index of the selected option.
    */
-  async showOptions(tool: Anthropic.Messages.ToolUseBlock) {
+  async handleShowOptions(input: { options: string[] }) {
     printMessage("Choose one of the following options:");
-    const options = (tool.input as { options: string[] }).options;
+    const options = input.options;
     for (let i = 0; i < options.length; i++) {
       printMessage(`${i}: ${options[i]}`);
     }
-    const response = await this.requestUserInput();
+    const response = await this.handleRequestUserInput();
     return parseInt(response);
   }
 
   async handleToolResponse(response: Anthropic.Messages.ToolUseBlock) {
-    // We have three hardcoded tools. The rest are written by the agent and executed on Riza.
-    if (response.name === CREATE_TOOL_TOOL.name) {
-      const tool = await this.createTool(response);
-      this.pushMessage({
-        role: "user",
-        content: [
-          {
-            type: "tool_result",
-            tool_use_id: response.id,
-            content: `Created tool ${tool.name}`,
-          },
-        ],
-      });
-    } else if (response.name === REQUEST_USER_INPUT_TOOL.name) {
-      const userInput = await this.requestUserInput();
-      this.pushMessage({
-        role: "user",
-        content: [
-          {
-            type: "tool_result",
-            tool_use_id: response.id,
-            content: userInput,
-          },
-        ],
-      });
-    } else if (response.name === SHOW_OPTIONS_TOOL.name) {
-      const index = await this.showOptions(response);
-      this.pushMessage({
-        role: "user",
-        content: [
-          {
-            type: "tool_result",
-            tool_use_id: response.id,
-            content: `${index}`,
-          },
-        ],
-      });
-    } else {
-      const output = await this.executeRizaTool(response.name, response.input);
-      this.pushMessage({
-        role: "user",
-        content: [
-          {
-            type: "tool_result",
-            tool_use_id: response.id,
-            content: JSON.stringify(output),
-          },
-        ],
-      });
+    const tool = this.tools[response.name];
+    if (!tool) {
+      throw new Error(`Tool ${response.name} not found`);
     }
+
+    const output = await tool.execute(response.input);
+
+    this.pushMessage({
+      role: "user",
+      content: [
+        {
+          type: "tool_result",
+          tool_use_id: response.id,
+          content: JSON.stringify(output),
+        },
+      ],
+    });
   }
 
   async handleResponse(responses: Anthropic.Messages.ContentBlock[]) {
@@ -241,7 +243,7 @@ export class SelfLearningAgent {
   }
 
   async requestDirectUserPrompt() {
-    const input = await this.requestUserInput();
+    const input = await this.handleRequestUserInput();
     this.pushMessage({
       role: "user",
       content: [
@@ -275,9 +277,7 @@ export class SelfLearningAgent {
       savePath,
       JSON.stringify(
         {
-          tools: Object.values(this.rizaTools).map(
-            (tool) => tool.rizaDefinition.id,
-          ),
+          tools: this.getRizaTools().map((tool) => tool.rizaToolDefinition.id),
         },
         null,
         2,
