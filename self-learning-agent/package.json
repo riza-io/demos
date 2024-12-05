@@ -10,7 +10,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
     "@riza-io/api": "^0.2.0",
-    "bun": "^1.1.36"
+    "bun": "^1.1.36",
+    "googleapis": "^144.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.9.1",
