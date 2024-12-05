@@ -1,43 +1,62 @@
-import { Anthropic } from '@anthropic-ai/sdk'
-import { Riza } from '@riza-io/api'
-import { anthropic, riza } from './clients'
-import * as readline from 'readline'
+import { Anthropic } from "@anthropic-ai/sdk";
+import { Riza } from "@riza-io/api";
+import { anthropic, riza } from "./clients";
+import * as readline from "readline";
 import {
   CREATE_TOOL_TOOL,
   formatRizaToolForClaude,
   renderContent,
   REQUEST_USER_INPUT_TOOL,
   SHOW_OPTIONS_TOOL,
-} from './toolUtils'
-import { SYSTEM_PROMPT } from './toolUtils'
-import { HTTP_AUTH_CONFIG } from './credentials'
+} from "./toolUtils";
+import { SYSTEM_PROMPT } from "./toolUtils";
+import { HTTP_AUTH_CONFIG } from "./credentials";
+import fs from "fs";
 
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
-})
+});
 
 const printMessage = (...messages: unknown[]) => {
-  console.log(...messages)
-  console.log('--------------------------------')
-}
+  console.log(...messages);
+  console.log("--------------------------------");
+};
 
 export class SelfLearningAgent {
-  messages: Anthropic.Messages.MessageParam[] = []
+  messages: Anthropic.Messages.MessageParam[] = [];
   rizaTools: Record<
     string,
     { rizaDefinition: Riza.Tool; claudeDefinition: Anthropic.Messages.Tool }
-  > = {}
-  requiresUserPrompt = true
+  > = {};
+  requiresUserPrompt = true;
 
   constructor() {
     this.messages = [
       {
-        role: 'user',
+        role: "user",
         content: SYSTEM_PROMPT,
       },
-    ]
-    console.log('System prompt:', SYSTEM_PROMPT)
+    ];
+    console.log("System prompt:", SYSTEM_PROMPT);
+  }
+
+  async load(path: string) {
+    console.log("[Loading agent...]");
+    const data = fs.readFileSync(path, "utf8");
+    const parsed = JSON.parse(data);
+    const toolIds = parsed.tools as string[];
+
+    const tools = await Promise.all(
+      toolIds.map(async (id: string) => riza.tools.get(id)),
+    );
+
+    for (const tool of tools) {
+      this.rizaTools[tool.name] = {
+        rizaDefinition: tool,
+        claudeDefinition: formatRizaToolForClaude(tool),
+      };
+    }
   }
 
   getToolsForClaude(): Anthropic.Messages.Tool[] {
@@ -47,7 +66,7 @@ export class SelfLearningAgent {
       REQUEST_USER_INPUT_TOOL,
       SHOW_OPTIONS_TOOL,
       ...Object.values(this.rizaTools).map((tool) => tool.claudeDefinition),
-    ]
+    ];
   }
 
   /**
@@ -55,17 +74,17 @@ export class SelfLearningAgent {
    * https://docs.riza.io/api-reference/tool/execute-tool
    */
   async executeRizaTool(name: string, input: unknown) {
-    const rizaTool = this.rizaTools[name].rizaDefinition
+    const rizaTool = this.rizaTools[name].rizaDefinition;
     const response = await riza.tools.exec(rizaTool.id, {
       input,
       http: HTTP_AUTH_CONFIG,
-    })
+    });
     if (response.execution.exit_code !== 0) {
       return {
         error: response.execution.stderr,
-      }
+      };
     }
-    return response.output
+    return response.output;
   }
 
   /**
@@ -74,25 +93,25 @@ export class SelfLearningAgent {
    */
   async createTool(tool: Anthropic.Messages.ToolUseBlock) {
     const input = tool.input as {
-      name: string
-      description: string
-      code: string
-      input_schema: Record<string, unknown>
-    }
+      name: string;
+      description: string;
+      code: string;
+      input_schema: Record<string, unknown>;
+    };
     const newRizaTool = await riza.tools.create({
       name: input.name,
       description: input.description,
       code: input.code,
       input_schema: input.input_schema,
-      language: 'TYPESCRIPT',
-    })
+      language: "TYPESCRIPT",
+    });
     this.rizaTools[newRizaTool.name] = {
       rizaDefinition: newRizaTool,
       claudeDefinition: formatRizaToolForClaude(newRizaTool),
-    }
-    printMessage('[Created Riza tool]: ', newRizaTool.name)
-    printMessage('[Meta] Self-written tools:', Object.keys(this.rizaTools))
-    return newRizaTool
+    };
+    printMessage("[Created Riza tool]: ", newRizaTool.name);
+    printMessage("[Meta] Self-written tools:", Object.keys(this.rizaTools));
+    return newRizaTool;
   }
 
   /**
@@ -100,144 +119,169 @@ export class SelfLearningAgent {
    */
   async requestUserInput() {
     return new Promise<string>((resolve) => {
-      rl.question('[Input requested] Enter your input: ', (input) => {
-        resolve(input)
-      })
-    })
+      rl.question("[Input requested] Enter your input: ", (input) => {
+        if (input === "save") {
+          this.save();
+          process.exit(0);
+        }
+        resolve(input);
+      });
+    });
   }
 
   /**
    * Shows a list of options to the user and returns the index of the selected option.
    */
   async showOptions(tool: Anthropic.Messages.ToolUseBlock) {
-    printMessage('Choose one of the following options:')
-    const options = (tool.input as { options: string[] }).options
+    printMessage("Choose one of the following options:");
+    const options = (tool.input as { options: string[] }).options;
     for (let i = 0; i < options.length; i++) {
-      printMessage(`${i}: ${options[i]}`)
+      printMessage(`${i}: ${options[i]}`);
     }
-    const response = await this.requestUserInput()
-    return parseInt(response)
+    const response = await this.requestUserInput();
+    return parseInt(response);
   }
 
   async handleToolResponse(response: Anthropic.Messages.ToolUseBlock) {
     // We have three hardcoded tools. The rest are written by the agent and executed on Riza.
     if (response.name === CREATE_TOOL_TOOL.name) {
-      const tool = await this.createTool(response)
+      const tool = await this.createTool(response);
       this.pushMessage({
-        role: 'user',
+        role: "user",
         content: [
           {
-            type: 'tool_result',
+            type: "tool_result",
             tool_use_id: response.id,
             content: `Created tool ${tool.name}`,
           },
         ],
-      })
+      });
     } else if (response.name === REQUEST_USER_INPUT_TOOL.name) {
-      const userInput = await this.requestUserInput()
+      const userInput = await this.requestUserInput();
       this.pushMessage({
-        role: 'user',
+        role: "user",
         content: [
           {
-            type: 'tool_result',
+            type: "tool_result",
             tool_use_id: response.id,
             content: userInput,
           },
         ],
-      })
+      });
     } else if (response.name === SHOW_OPTIONS_TOOL.name) {
-      const index = await this.showOptions(response)
+      const index = await this.showOptions(response);
       this.pushMessage({
-        role: 'user',
+        role: "user",
         content: [
           {
-            type: 'tool_result',
+            type: "tool_result",
             tool_use_id: response.id,
             content: `${index}`,
           },
         ],
-      })
+      });
     } else {
-      const output = await this.executeRizaTool(response.name, response.input)
+      const output = await this.executeRizaTool(response.name, response.input);
       this.pushMessage({
-        role: 'user',
+        role: "user",
         content: [
           {
-            type: 'tool_result',
+            type: "tool_result",
             tool_use_id: response.id,
             content: JSON.stringify(output),
           },
         ],
-      })
+      });
     }
   }
 
   async handleResponse(responses: Anthropic.Messages.ContentBlock[]) {
     this.pushMessage({
-      role: 'assistant',
+      role: "assistant",
       content: responses,
-    })
-    this.requiresUserPrompt = true
+    });
+    this.requiresUserPrompt = true;
 
     for (const response of responses) {
-      if (response.type === 'tool_use') {
-        await this.handleToolResponse(response)
+      if (response.type === "tool_use") {
+        await this.handleToolResponse(response);
       }
     }
   }
 
   pushMessage(...messages: Anthropic.Messages.MessageParam[]) {
-    this.messages.push(...messages)
+    this.messages.push(...messages);
 
     for (const message of messages) {
-      const renderedContent = renderContent(message.content)
+      const renderedContent = renderContent(message.content);
       for (const line of renderedContent) {
-        if (message.role === 'user') {
-          printMessage('Me:', line)
+        if (message.role === "user") {
+          printMessage("Me:", line);
         } else {
-          printMessage('Assistant:', line)
+          printMessage("Assistant:", line);
         }
       }
     }
 
-    if (messages.some((message) => message.role === 'user')) {
-      this.requiresUserPrompt = false
+    if (messages.some((message) => message.role === "user")) {
+      this.requiresUserPrompt = false;
     }
   }
 
   async callLLM() {
-    printMessage('[Querying LLM...]')
+    printMessage("[Querying LLM...]");
     const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20240620',
+      model: "claude-3-5-sonnet-20240620",
       max_tokens: 1024,
       messages: this.messages,
       tools: this.getToolsForClaude(),
-    })
-    await this.handleResponse(response.content)
-    return response.content
+    });
+    await this.handleResponse(response.content);
+    return response.content;
   }
 
   async requestDirectUserPrompt() {
-    const input = await this.requestUserInput()
+    const input = await this.requestUserInput();
     this.pushMessage({
-      role: 'user',
+      role: "user",
       content: [
         {
-          type: 'text',
+          type: "text",
           text: input,
         },
       ],
-    })
+    });
   }
 
   async loop() {
-    printMessage('Starting loop')
+    printMessage("Starting loop");
 
     while (true) {
       if (this.requiresUserPrompt) {
-        await this.requestDirectUserPrompt()
+        await this.requestDirectUserPrompt();
       }
-      await this.callLLM()
+      await this.callLLM();
     }
+  }
+
+  save() {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const savePath = `./saved-agents/${timestamp}.json`;
+
+    printMessage("[Saving agent...]", savePath);
+    printMessage(`To use this agent again, run "npm start ${timestamp}"`);
+
+    fs.writeFileSync(
+      savePath,
+      JSON.stringify(
+        {
+          tools: Object.values(this.rizaTools).map(
+            (tool) => tool.rizaDefinition.id,
+          ),
+        },
+        null,
+        2,
+      ),
+    );
   }
 }
