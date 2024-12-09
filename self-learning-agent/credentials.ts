@@ -16,10 +16,10 @@ export const HTTP_AUTH_CONFIG: Riza.ToolExecParams.HTTP = {
       host: "slack.com",
       auth: { bearer: { token: process.env.SLACK_API_KEY } },
     },
-    {
-      host: "*.googleapis.com",
-      auth: { query: { key: "key", value: process.env.GOOGLE_API_KEY } },
-    },
+    // {
+    //   host: "*.googleapis.com",
+    //   auth: { query: { key: "key", value: process.env.GOOGLE_API_KEY } },
+    // },
     {
       host: "api.openai.com",
       auth: { bearer: { token: process.env.OPENAI_API_KEY } },
@@ -45,5 +45,5 @@ export const getGoogleServiceAccountAccessToken = async () => {
   // Get the access token
   const token = await client.getAccessToken();
 
-  return token;
+  return token.token;
 };

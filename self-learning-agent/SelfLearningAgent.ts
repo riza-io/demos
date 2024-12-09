@@ -10,7 +10,10 @@ import {
   SHOW_OPTIONS_TOOL,
 } from "./toolUtils";
 import { SYSTEM_PROMPT } from "./toolUtils";
-import { HTTP_AUTH_CONFIG } from "./credentials";
+import {
+  getGoogleServiceAccountAccessToken,
+  HTTP_AUTH_CONFIG,
+} from "./credentials";
 import fs from "fs";
 
 const rl = readline.createInterface({
@@ -40,6 +43,7 @@ export class SelfLearningAgent {
   messages: Anthropic.Messages.MessageParam[] = [];
   requiresUserPrompt = true;
   tools: Record<string, ToolDefinition> = {};
+  authConfig: Riza.Tools.ToolExecParams.HTTP = HTTP_AUTH_CONFIG;
 
   constructor() {
     this.messages = [
@@ -84,6 +88,14 @@ export class SelfLearningAgent {
     const data = fs.readFileSync(path, "utf8");
     const parsed = JSON.parse(data);
     const toolIds = parsed.tools as string[];
+    const prompt = parsed.prompt as string | undefined;
+
+    if (prompt) {
+      this.messages.push({
+        role: "user",
+        content: prompt,
+      });
+    }
 
     const tools = await Promise.all(
       toolIds.map(async (id: string) => riza.tools.get(id)),
@@ -106,7 +118,7 @@ export class SelfLearningAgent {
     return async (input: unknown) => {
       const response = await riza.tools.exec(rizaToolDefinition.id, {
         input,
-        http: HTTP_AUTH_CONFIG,
+        http: this.authConfig,
       });
       if (response.execution.exit_code !== 0) {
         return {
@@ -146,7 +158,7 @@ export class SelfLearningAgent {
       "[Meta] Self-written tools:",
       this.getRizaTools().map((tool) => tool.rizaToolDefinition.name),
     );
-    return `Created tool: ${newRizaTool.name}`;
+    return `Created tool: ${newRizaTool.name} (Tool ID: ${newRizaTool.id})`;
   }
 
   /**
@@ -255,8 +267,25 @@ export class SelfLearningAgent {
     });
   }
 
+  async tryGetGoogleAccessToken() {
+    try {
+      const token = await getGoogleServiceAccountAccessToken();
+      if (token) {
+        this.authConfig.allow?.push({
+          host: "*.googleapis.com",
+          auth: { bearer: { token: token } },
+        });
+        console.log("Successfully configured Google access token", token);
+      }
+    } catch (e) {
+      console.log("No Google access token configured");
+    }
+  }
+
   async loop() {
     printMessage("Starting loop");
+
+    await this.tryGetGoogleAccessToken();
 
     while (true) {
       if (this.requiresUserPrompt) {
