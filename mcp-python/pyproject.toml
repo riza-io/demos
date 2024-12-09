@@ -1,0 +1,21 @@
+[project]
+name = "riza-mcp-python"
+version = "0.1.0"
+description = "Riza MCP Python server"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+ "httpx>=0.28.1",
+ "mcp>=1.1.1",
+ "python-dotenv>=1.0.1",
+]
+[[project.authors]]
+name = "David Lee"
+email = "david@riza.io"
+
+[build-system]
+requires = [ "hatchling",]
+build-backend = "hatchling.build"
+
+[project.scripts]
+riza-mcp-python = "riza_mcp_python:main"
