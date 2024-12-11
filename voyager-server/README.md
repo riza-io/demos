@@ -32,6 +32,8 @@ This MCP server should work with any MCP client. We've tested this with Claude D
 
 This demo _requires_ a Riza API key, which you can get from your [Riza Dashboard](https://dashboard.riza.io), and an Anthropic API key, which you can get from your [Anthropic Dashboard](https://console.anthropic.com/settings/keys).
 
+The other keys are optional. You only need to provide them if you want to prompt the Voyager agent to make calls to those APIs (e.g. "list my stripe charges" will call the Stripe API, and will require a Stripe API key).
+
 > [!NOTE]
 > All LLM-generated code is executed securely and remotely on Riza's servers using our Code Interpreter, not on your local machine. However, this code can make real API calls, so we recommend using keys for non-production environments (such as Stripe testmode keys).
 
