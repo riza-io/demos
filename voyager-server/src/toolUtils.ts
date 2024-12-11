@@ -106,7 +106,7 @@ export const EDIT_TOOL_TOOL: Tool = {
 
 export const EXECUTE_CODE_TOOL: Tool = {
   name: "execute_code",
-  description: "Execute arbitrary Typescript or Python code.",
+  description: "Execute arbitrary Typescript or Python code. The function should be called ",
   inputSchema: {
     type: "object",
     properties: {
@@ -119,6 +119,35 @@ export const EXECUTE_CODE_TOOL: Tool = {
         type: "string",
         description:
           "The language of the code you are writing. This must be either 'TYPESCRIPT' or 'PYTHON'.",
+      },
+    },
+  },
+};
+
+export const LIST_TOOLS_TOOL: Tool = {
+  name: "list_tools",
+  description: "Lists the tool definitions of all self-written tools available for use. These tools can be used by calling `use_tool` with the name and input.",
+  inputSchema: {
+    type: "object",
+    properties: {},
+  },
+};
+
+export const USE_TOOL_TOOL: Tool = {
+  name: "use_tool",
+  description: "Use a tool. This tool will be used to use a self-written tool.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      name: {
+        type: "string",
+        description:
+          "The name of the tool you are using.",
+      },
+      input: {
+        type: "object",
+        description:
+          "The input to the tool. This must match the input schema of the tool.",
       },
     },
   },

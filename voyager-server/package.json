@@ -1,12 +1,15 @@
 {
-  "name": "riza-mcp-server",
+  "name": "@riza-io/voyager-server",
+  "author": "Riza (https://riza.io)",
   "version": "0.1.0",
-  "description": "A Model Context Protocol server for riza.io",
-  "private": true,
+  "description": "A Model Context Protocol server for a self-building agent",
+  "bugs": "https://github.com/riza-io/demos/issues",
   "type": "module",
   "bin": {
-    "riza-mcp-server": "./build/index.js"
+    "voyager-server": "./build/index.js"
   },
+  "license": "MIT",
+  "homepage": "https://github.com/riza-io/demos/tree/main/voyager-server",
   "files": [
     "build"
   ],

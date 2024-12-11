@@ -10,12 +10,13 @@ import {
 import dotenv from "dotenv";
 import { ToolMap } from "./types.js";
 import { Riza } from "@riza-io/api";
-import { CREATE_TOOL_TOOL, EDIT_TOOL_TOOL, EXECUTE_CODE_TOOL, FETCH_TOOL_TOOL, SAVE_AGENT_TOOL } from "./toolUtils.js";
+import { CREATE_TOOL_TOOL, EDIT_TOOL_TOOL, EXECUTE_CODE_TOOL, FETCH_TOOL_TOOL, LIST_TOOLS_TOOL, SAVE_AGENT_TOOL, USE_TOOL_TOOL } from "./toolUtils.js";
 import { HTTP_AUTH_CONFIG } from "./credentials.js";
 import fs from "fs";
+import os from "os";
 dotenv.config();
 
-const SAVED_AGENTS_DIR = "/Users/david/riza/saved-agents";
+const SAVED_AGENTS_DIR = os.homedir() + "/riza/saved-agents";
 
 const printMessage = (...messages: unknown[]) => {
   // Using error to avoid interfering with MCP communication that happens on stdout
@@ -42,7 +43,7 @@ class RizaServer {
   }) {
     this.server = new Server(
       {
-        name: "riza-mcp-server",
+        name: "self-writing-agent-mcp-server",
         version: "0.1.0",
       },
       {
@@ -86,10 +87,11 @@ class RizaServer {
       execute: this.handleSaveAgent.bind(this),
     };
 
-    this.tools[EXECUTE_CODE_TOOL.name] = {
-      definition: EXECUTE_CODE_TOOL,
-      execute: this.handleExecuteCode.bind(this),
-    };
+    // Prefer the LLM to write tools rather than simple code execution
+    // this.tools[EXECUTE_CODE_TOOL.name] = {
+    //   definition: EXECUTE_CODE_TOOL,
+    //   execute: this.handleExecuteCode.bind(this),
+    // };
 
     this.tools[FETCH_TOOL_TOOL.name] = {
       definition: FETCH_TOOL_TOOL,
@@ -99,6 +101,16 @@ class RizaServer {
     this.tools[EDIT_TOOL_TOOL.name] = {
       definition: EDIT_TOOL_TOOL,
       execute: this.handleEditTool.bind(this),
+    };
+
+    this.tools[LIST_TOOLS_TOOL.name] = {
+      definition: LIST_TOOLS_TOOL,
+      execute: this.handleListTools.bind(this),
+    };
+
+    this.tools[USE_TOOL_TOOL.name] = {
+      definition: USE_TOOL_TOOL,
+      execute: this.handleUseTool.bind(this),
     };
   }
 
@@ -182,7 +194,7 @@ class RizaServer {
     await this.registerRizaTool(newRizaTool);
     printMessage("[Created Riza tool]", newRizaTool.name);
     return {
-      content: [{ type: "text", text: `Created tool: ${newRizaTool.name}` }],
+      content: [{ type: "text", text: `Created tool: ${JSON.stringify(this.tools[newRizaTool.name].definition)}` }],
     };
   }
 
@@ -253,6 +265,23 @@ class RizaServer {
     return {
       content: [{ type: "text", text: `Saved agent: ${input.name}` }],
     };
+  }
+
+  async handleListTools(): Promise<CallToolResult> {
+    return {
+      content: [{ type: "text", text: JSON.stringify(Object.values(this.tools).map(tool => tool.definition)) }],
+    };
+  }
+
+  async handleUseTool(input: {name: string, input: unknown}): Promise<CallToolResult> {
+    const tool = this.tools[input.name]
+
+    if (!tool || !('rizaDefinition' in tool)) {
+      throw new Error(`Tool ${input.name} not found`);
+    }
+
+    const result = await tool.execute(input.input)
+    return result
   }
 
   createRizaToolHandler(
