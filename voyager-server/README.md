@@ -1,5 +1,7 @@
 ### "Voyager" Agent MCP Server
 
+https://github.com/user-attachments/assets/f906ecba-0e5f-404d-9a95-2eda2f2fbdbc
+
 This implements an [MCP Server](https://modelcontextprotocol.io) that uses Riza's Code Interpreter (specifically the [Tools API](https://riza.io/blog/introducing-tools-api)) to allow an LLM to write and execute its own tools in a sandboxed environment.
 
 You can learn more about Riza's Code Interpreter in our [docs](https://docs.riza.io/introduction).
