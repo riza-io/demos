@@ -1,1 +1,0 @@
-calculate 52! (52 factorial)

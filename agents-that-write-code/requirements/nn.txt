@@ -1,1 +1,0 @@
-implement a neural net from scratch
