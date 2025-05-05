@@ -9,7 +9,7 @@ export default function TransformPage() {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [schema, setSchema] = useState<string>(
-    JSON.stringify(["name", "email", "phone", "address"])
+    JSON.stringify(["name", "email", "phone", "address", "age"])
   );
 
   async function handleSubmit(e: React.FormEvent) {
@@ -20,9 +20,7 @@ export default function TransformPage() {
     try {
       // Parse the input as JSON
       const dataArray = JSON.parse(inputData);
-
-      // Example schema - this could be made configurable
-      const schema = ["name", "email", "age"];
+      const schemaArray = JSON.parse(schema);
 
       const response = await fetch("/api/transform-data", {
         method: "POST",
@@ -31,7 +29,7 @@ export default function TransformPage() {
         },
         body: JSON.stringify({
           data: dataArray,
-          schema: schema,
+          schema: schemaArray,
         }),
       });
 
