@@ -9,7 +9,7 @@ export default function TransformPage() {
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [schema, setSchema] = useState<string>(
-    JSON.stringify(["name", "email", "phone", "address", "age"])
+    JSON.stringify(["name", "email_address", "address", "age"])
   );
 
   async function handleSubmit(e: React.FormEvent) {

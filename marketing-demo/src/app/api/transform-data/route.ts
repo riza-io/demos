@@ -1,17 +1,24 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
-
-function executeCode(code: string, input: unknown) {
-  // todo: implement code execution
-  console.log("Executing code:", code);
-  console.log("Input:", input);
-  return input;
-}
+import Riza from "@riza-io/api";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
+
+const riza = new Riza({
+  apiKey: process.env.RIZA_API_KEY,
+});
+
+async function executeCode(code: string, input: unknown) {
+  const result = await riza.command.execFunc({
+    code,
+    input,
+    language: "typescript",
+  });
+  return result;
+}
 
 const TransformDataSchema = z.object({
   data: z.array(z.record(z.any())).min(1),
@@ -19,6 +26,21 @@ const TransformDataSchema = z.object({
 });
 
 type TransformDataSchema = z.infer<typeof TransformDataSchema>;
+
+function getCORSHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "https://riza.io, https://bernal.rodeo",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
+}
+
+export async function OPTIONS(request: Request) {
+  return new NextResponse(null, {
+    status: 204,
+    headers: getCORSHeaders(),
+  });
+}
 
 export async function POST(request: Request) {
   try {
@@ -58,8 +80,6 @@ Requirements:
 
 Return ONLY the code, no explanation needed.`;
 
-    console.log("Prompt:", prompt);
-
     // Call Claude API with the prompt
     const response = await anthropic.messages.create({
       model: "claude-3-5-sonnet-latest",
@@ -77,14 +97,25 @@ Return ONLY the code, no explanation needed.`;
         : "invalid response";
 
     // Execute the generated code with the full data array
-    const transformedData = executeCode(generatedCode, data);
+    const rizaResponse = await executeCode(generatedCode, data);
 
-    return NextResponse.json({ result: transformedData });
+    return NextResponse.json(
+      {
+        code: generatedCode,
+        result: rizaResponse.output,
+      },
+      {
+        headers: getCORSHeaders(),
+      }
+    );
   } catch (error) {
     console.error("Error:", error);
     return NextResponse.json(
       { error: "Failed to process request" },
-      { status: 400 }
+      {
+        status: 400,
+        headers: getCORSHeaders(),
+      }
     );
   }
 }
