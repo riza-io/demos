@@ -1,24 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
-import Riza from "@riza-io/api";
+import { getCORSHeaders } from "@/cors";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
-
-const riza = new Riza({
-  apiKey: process.env.RIZA_API_KEY,
-});
-
-async function executeCode(code: string, input: unknown) {
-  const result = await riza.command.execFunc({
-    code,
-    input,
-    language: "typescript",
-  });
-  return result;
-}
 
 const TransformDataSchema = z.object({
   data: z.array(z.record(z.any())).min(1),
@@ -27,18 +14,10 @@ const TransformDataSchema = z.object({
 
 type TransformDataSchema = z.infer<typeof TransformDataSchema>;
 
-function getCORSHeaders() {
-  return {
-    "Access-Control-Allow-Origin": "https://riza.io, https://bernal.rodeo",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  };
-}
-
 export async function OPTIONS(request: Request) {
   return new NextResponse(null, {
     status: 204,
-    headers: getCORSHeaders(),
+    headers: getCORSHeaders(request),
   });
 }
 
@@ -96,16 +75,12 @@ Return ONLY the code, no explanation needed.`;
         ? response.content[0].text
         : "invalid response";
 
-    // Execute the generated code with the full data array
-    const rizaResponse = await executeCode(generatedCode, data);
-
     return NextResponse.json(
       {
         code: generatedCode,
-        result: rizaResponse.output,
       },
       {
-        headers: getCORSHeaders(),
+        headers: getCORSHeaders(request),
       }
     );
   } catch (error) {
@@ -114,7 +89,7 @@ Return ONLY the code, no explanation needed.`;
       { error: "Failed to process request" },
       {
         status: 400,
-        headers: getCORSHeaders(),
+        headers: getCORSHeaders(request),
       }
     );
   }

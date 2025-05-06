@@ -6,6 +6,7 @@ import customers from "@/examples/customers.json";
 export default function TransformPage() {
   const [inputData, setInputData] = useState(JSON.stringify(customers));
   const [isLoading, setIsLoading] = useState(false);
+  const [generatedCode, setGeneratedCode] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [schema, setSchema] = useState<string>(
@@ -22,7 +23,7 @@ export default function TransformPage() {
       const dataArray = JSON.parse(inputData);
       const schemaArray = JSON.parse(schema);
 
-      const response = await fetch("/api/transform-data", {
+      const response = await fetch("/api/transform-data/generate-code", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -39,7 +40,21 @@ export default function TransformPage() {
         throw new Error(data.error || "Failed to transform data");
       }
 
-      setResult(data.result);
+      setGeneratedCode(data.code);
+
+      const generatedCode = data.code;
+
+      const executeResponse = await fetch("/api/transform-data/execute", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ code: generatedCode, data: dataArray }),
+      });
+
+      const executeData = await executeResponse.json();
+
+      setResult(executeData.output);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "An unknown error occurred"
@@ -126,6 +141,23 @@ export default function TransformPage() {
           }}
         >
           Error: {error}
+        </div>
+      )}
+
+      {generatedCode && (
+        <div style={{ marginTop: "20px" }}>
+          <h2>Generated Code:</h2>
+          <pre
+            style={{
+              backgroundColor: "#f5f5f5",
+              padding: "15px",
+              borderRadius: "4px",
+              overflow: "auto",
+              maxHeight: "400px",
+            }}
+          >
+            {generatedCode}
+          </pre>
         </div>
       )}
 
