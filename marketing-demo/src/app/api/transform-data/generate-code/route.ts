@@ -14,6 +14,25 @@ const TransformDataSchema = z.object({
 
 type TransformDataSchema = z.infer<typeof TransformDataSchema>;
 
+// Stream helper to insert custom lines into the Anthropic stream
+const insertCustomLines = (prefix: string = "", suffix: string = "") => {
+  return new TransformStream({
+    start(controller) {
+      if (prefix) {
+        controller.enqueue(prefix);
+      }
+    },
+    async transform(chunk, controller) {
+      controller.enqueue(chunk);
+    },
+    async flush(controller) {
+      if (suffix) {
+        controller.enqueue(suffix);
+      }
+    },
+  });
+};
+
 export async function OPTIONS(request: Request) {
   return new NextResponse(null, {
     status: 204,
@@ -68,8 +87,16 @@ Return ONLY the code, no explanation needed.`;
         "You are a TypeScript expert. Provide only the requested code with no additional explanation or markdown.",
     });
 
-    // Return the streaming response
-    return new Response(stream.toReadableStream(), {
+    // We want to inject our prompt into the stream so the client can see it
+    const transformedStream = stream
+      .toReadableStream()
+      .pipeThrough(
+        insertCustomLines(
+          `${JSON.stringify({ type: "prompt", prompt: prompt })}\n`
+        )
+      );
+
+    return new Response(transformedStream, {
       headers: {
         ...getCORSHeaders(request),
         "Content-Type": "text/plain; charset=utf-8",
