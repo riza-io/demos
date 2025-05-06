@@ -1,4 +1,4 @@
-const ALLOWED_ORIGINS = ["https://riza.io", "https://bernal.rodeo"];
+const ALLOWED_ORIGINS = ["https://riza.io"];
 
 // These allow Riza's marketing website to make cross-origin requests to this backend
 export function getCORSHeaders(request: Request): HeadersInit {
