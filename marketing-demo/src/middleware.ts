@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const rateLimitMap = new Map();
 
+// todo: delete this middleware
 function rateLimitMiddleware(request: NextRequest) {
   // Only apply rate limiting to generate-code since it calls claude (expensive)
   if (
