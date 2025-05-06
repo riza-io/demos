@@ -78,6 +78,7 @@ Return ONLY the code, no explanation needed.`;
     return NextResponse.json(
       {
         code: generatedCode,
+        prompt: prompt,
       },
       {
         headers: getCORSHeaders(request),
