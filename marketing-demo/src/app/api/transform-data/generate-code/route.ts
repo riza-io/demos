@@ -59,8 +59,7 @@ Requirements:
 
 Return ONLY the code, no explanation needed.`;
 
-    // Call Claude API with the prompt
-    const response = await anthropic.messages.create({
+    const stream = anthropic.messages.stream({
       model: "claude-3-5-sonnet-latest",
       max_tokens: 1000,
       temperature: 0,
@@ -69,21 +68,13 @@ Return ONLY the code, no explanation needed.`;
         "You are a TypeScript expert. Provide only the requested code with no additional explanation or markdown.",
     });
 
-    // Extract the code from Claude's response
-    const generatedCode =
-      response.content[0].type === "text"
-        ? response.content[0].text
-        : "invalid response";
-
-    return NextResponse.json(
-      {
-        code: generatedCode,
-        prompt: prompt,
+    // Return the streaming response
+    return new Response(stream.toReadableStream(), {
+      headers: {
+        ...getCORSHeaders(request),
+        "Content-Type": "text/plain; charset=utf-8",
       },
-      {
-        headers: getCORSHeaders(request),
-      }
-    );
+    });
   } catch (error) {
     console.error("Error:", error);
     return NextResponse.json(
