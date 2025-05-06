@@ -17,6 +17,7 @@ export default function TransformPage() {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+    setGeneratedCode(""); // Reset generated code
 
     try {
       // Parse the input as JSON
@@ -34,26 +35,52 @@ export default function TransformPage() {
         }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.error || "Failed to transform data");
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to transform data");
       }
 
-      setGeneratedCode(data.code);
+      if (!response.body) {
+        throw new Error("No response body received");
+      }
 
-      const generatedCode = data.code;
+      // Set up streaming
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulatedCode = "";
 
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.trim()) {
+            try {
+              const parsedLine = JSON.parse(line);
+              if (parsedLine?.type === "content_block_delta") {
+                accumulatedCode += parsedLine.delta?.text || "";
+                setGeneratedCode(accumulatedCode);
+              }
+            } catch (e) {
+              console.warn("Failed to parse line:", line);
+            }
+          }
+        }
+      }
+
+      // After streaming is complete, execute the transformed code
       const executeResponse = await fetch("/api/transform-data/execute", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ code: generatedCode, data: dataArray }),
+        body: JSON.stringify({ code: accumulatedCode, data: dataArray }),
       });
 
       const executeData = await executeResponse.json();
-
       setResult(executeData.output);
     } catch (err) {
       setError(
