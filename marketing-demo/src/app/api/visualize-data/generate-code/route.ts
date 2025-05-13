@@ -71,6 +71,7 @@ Here are the rules for writing code:
 - The function should return an object that has 1 field: "image". The "image" data should be the chart as a base64-encoded PNG image.
 - Use only the Python standard library and the following libraries: \`pandas\`, \`matplotlib\`, and \`seaborn\`.
 - For columns that appear to be numbers, make sure to cast them first.
+- Where appropriate, the output may contain multiple charts.
 
 Provide only the requested code with no additional explanation or markdown.`;
 
