@@ -38,13 +38,15 @@ export async function POST(request: Request) {
     // Construct the prompt for Claude
     const prompt1 = `You are doing data analysis on a set of data. There are ${
       lines.length
-    } data points in this data set. Here are ${sampleSize} random lines. The header of the data is:
+    } data points in this data set. The header of the data is:
     ${header}
 
 Here are the ${sampleSize} random entries from the data:
-    ${samples.map((sample) => `<example>${sample}</example>`).join("\n")}
+<examples>
+${samples.join("\n")}
+</examples>
 
-Come up with a written analysis of the data. Say what you think the data is about, and come up with a plan on how to visualize it using some sort of graph or chart.`;
+Come up with a written analysis of the data, based on the samples. Say what you think the data is about, and come up with a plan on how to visualize it using some sort of graph or chart.`;
 
     const analysisStream = anthropic.messages.stream({
       model: "claude-3-7-sonnet-latest",
@@ -63,11 +65,11 @@ The function signature is:
 def execute(input):
 \`\`\`
 
-\`input\` is a Python object. The full data is available as text at \`input["data"]\`. The data is in CSV format.
+\`input\` is a Python object. The full dataset is available as text at \`input["data"]\`. The data is in CSV format.
 
 Here are the rules for writing code:
 - The function should return an object that has 1 field: "image". The "image" data should be the chart as a base64-encoded PNG image.
-- Use only the Python standard library and built-in modules. In addition, you can use \`pandas\`, \`matplotlib\`, and \`seaborn\`.
+- Use only the Python standard library and the following libraries: \`pandas\`, \`matplotlib\`, and \`seaborn\`.
 - For columns that appear to be numbers, make sure to cast them first.
 - Maximum size of the chart should be 6"x4" at 150 DPI.
 
