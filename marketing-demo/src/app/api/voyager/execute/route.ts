@@ -18,6 +18,9 @@ async function executeCode(code: string, input: unknown) {
     input,
     language: "typescript",
     env: rizaEnvVars,
+    http: {
+      allow: [{ host: "*" }],
+    },
   });
   return result;
 }

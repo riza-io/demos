@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { getCORSHeaders } from "@/cors";
 import { MessageParam } from "@anthropic-ai/sdk/resources/messages.mjs";
+import { ChatRequest, ChatRequestSchema } from "./types";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -23,7 +23,9 @@ function execute(input: unknown) {
 
 The \`input\` argument passed to the \`execute_function\` tool will be the input to the function.
 
-If you write code that uses an external API, you must make plain HTTP requests to the API, using only the node fetch library.
+If you write code that uses an external API, you must make plain HTTP requests to the API, using only the fetch library. Assume fetch is available without any imports.
+
+Do not use any external libraries or imports.
 
 You have access to the following API keys as environment variables:
 
@@ -37,45 +39,6 @@ GET requests cannot have request bodies. You should use URL query parameters to 
 Your code should return JSON objects rather than strings.
 `;
 
-// Define schemas for different message types
-const TextMessageSchema = z.object({
-  role: z.enum(["user", "assistant"]),
-  content: z.string(),
-  type: z.literal("text"),
-});
-
-const ToolUseSchema = z.object({
-  role: z.enum(["user", "assistant"]),
-  type: z.literal("tool_use"),
-  tool: z.object({
-    name: z.string(),
-    input: z.record(z.any()),
-    id: z.string(),
-  }),
-});
-
-const ToolResultSchema = z.object({
-  role: z.enum(["user", "assistant", "tool"]),
-  type: z.literal("tool_result"),
-  tool: z.object({
-    name: z.string(),
-    output: z.string(),
-  }),
-});
-
-const MessageSchema = z.union([
-  TextMessageSchema,
-  ToolUseSchema,
-  ToolResultSchema,
-]);
-
-const ChatRequestSchema = z.object({
-  history: z.array(MessageSchema),
-  message: z.string(),
-});
-
-type ChatRequest = z.infer<typeof ChatRequestSchema>;
-
 export async function OPTIONS(request: Request) {
   return new NextResponse(null, {
     status: 204,
@@ -86,7 +49,7 @@ export async function OPTIONS(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { history, message } = ChatRequestSchema.parse(body);
+    const { history } = ChatRequestSchema.parse(body);
 
     // Convert our internal message format to Anthropic's format
     const messages: MessageParam[] = [];
@@ -94,6 +57,8 @@ export async function POST(request: Request) {
     // Process history to create the proper message sequence
     for (let i = 0; i < history.length; i++) {
       const msg = history[i];
+
+      console.log("msg", msg);
 
       if (msg.type === "text") {
         messages.push({
@@ -117,7 +82,7 @@ export async function POST(request: Request) {
         // Tool responses need to be formatted according to Anthropic's API
         const toolResultContent: Anthropic.ToolResultBlockParam = {
           type: "tool_result",
-          tool_use_id: msg.tool.name,
+          tool_use_id: msg.tool.id,
           content: msg.tool.output,
         };
         messages.push({
@@ -126,9 +91,6 @@ export async function POST(request: Request) {
         });
       }
     }
-
-    // Add the current user message
-    messages.push({ role: "user", content: message });
 
     // Create a streaming response from Anthropic
     const stream = anthropic.messages.stream({
