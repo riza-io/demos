@@ -1,9 +1,8 @@
 "use client";
 
 import Anthropic from "@anthropic-ai/sdk";
-import CodeBlock from "./CodeBlock";
-import React, { useState } from "react";
-import { parse } from "best-effort-json-parser";
+import React, { useContext } from "react";
+import { ToolUseContext } from "../context";
 
 interface MessageItemProps {
   message: Anthropic.Messages.MessageParam;
@@ -22,29 +21,9 @@ const getRoleStyle = (role: string) => {
   }
 };
 
-const ToolResult = ({ content }: { content: string }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  return (
-    <div className={`${getRoleStyle("tool")}`}>
-      <div className="font-semibold flex justify-between">
-        <div>Riza execution result</div>
-        <div>
-          <button onClick={() => setIsOpen(!isOpen)}>
-            {isOpen ? "Hide" : "Show"}
-          </button>
-        </div>
-      </div>
-      {isOpen && (
-        <div className="mt-2">
-          <CodeBlock code={content} language="json" />
-        </div>
-      )}
-    </div>
-  );
-};
-
 export default function MessageItem({ message }: MessageItemProps) {
   const { role, content } = message;
+  const { setToolUse } = useContext(ToolUseContext);
 
   const renderMessageContent = (
     messageContent: string | Anthropic.Messages.ContentBlockParam
@@ -66,43 +45,40 @@ export default function MessageItem({ message }: MessageItemProps) {
         </div>
       );
     } else if (messageContent.type === "tool_use") {
-      if (typeof messageContent.input === "string") {
-        const parsedInput = parse(messageContent.input);
-        if (parsedInput.code) {
-          console.log("parsedInput", parsedInput.code);
-          return (
-            <div className={`${getRoleStyle(role)}`}>
-              <div className="font-semibold">
-                Using tool: {messageContent.name}
-              </div>
-              <CodeBlock code={parsedInput.code} language="typescript" />
-            </div>
-          );
-        }
-      }
       return (
-        <div className={`${getRoleStyle("tool")}`}>
+        <div
+          className={`flex flex-row gap-2 justify-between ${getRoleStyle(
+            "tool"
+          )}`}
+        >
           <div className="font-semibold">Using tool: {messageContent.name}</div>
-          <div className="">Input:</div>
-          {typeof messageContent.input === "string" ? (
-            <div className="whitespace-pre-wrap">{messageContent.input}</div>
-          ) : messageContent.name === "execute_function" &&
-            (messageContent.input as any)?.code ? (
-            <CodeBlock
-              code={(messageContent.input as any).code}
-              language="typescript"
-            />
-          ) : (
-            <pre className="bg-gray-800 text-white p-3 rounded overflow-auto">
-              {JSON.stringify(messageContent.input, null, 2)}
-            </pre>
-          )}
+          <button
+            onClick={() =>
+              setToolUse(
+                messageContent.id,
+                messageContent.name,
+                messageContent.input
+              )
+            }
+          >
+            View tool use
+          </button>
         </div>
       );
     } else if (messageContent.type === "tool_result") {
       try {
-        const output = JSON.parse(messageContent.content as string);
-        return <ToolResult content={JSON.stringify(output, null, 2)} />;
+        return (
+          <div className={`${getRoleStyle("tool")}`}>
+            <div className="flex justify-between">
+              <div className="font-semibold">Riza execution result</div>
+              <div>
+                <button onClick={() => setToolUse(messageContent.tool_use_id)}>
+                  View tool result
+                </button>
+              </div>
+            </div>
+          </div>
+        );
       } catch (e) {
         return <div>Unable to render message content</div>;
       }

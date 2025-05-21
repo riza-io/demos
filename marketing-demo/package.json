@@ -15,6 +15,7 @@
     "next": "15.3.1",
     "postcss": "^8.5.3",
     "prism-react-renderer": "^2.4.1",
+    "react-resizable-panels": "^3.0.2",
     "tailwindcss": "^4.1.7",
     "zod": "^3.24.4"
   },

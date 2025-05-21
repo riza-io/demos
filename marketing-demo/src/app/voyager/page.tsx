@@ -1,9 +1,35 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, createContext, useMemo } from "react";
 import ChatInput from "./components/ChatInput";
 import MessageList from "./components/MessageList";
 import Anthropic from "@anthropic-ai/sdk";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import { ToolUseContext } from "./context";
+import CodeDisplay from "./components/CodeBlock";
+import CodeBlock from "./components/CodeBlock";
+import { parse as bestEffortParse } from "best-effort-json-parser";
+
+const renderToolUse = (toolName: string, toolInput: unknown) => {
+  if (
+    typeof toolInput === "object" &&
+    toolInput !== null &&
+    "code" in toolInput &&
+    typeof toolInput.code === "string"
+  ) {
+    return (
+      <CodeDisplay
+        code={toolInput.code}
+        language="typescript"
+        className="p-4"
+      />
+    );
+  }
+
+  return null;
+
+  // return JSON.stringify(toolInput, null, 2);
+};
 
 export default function VoyagerPage() {
   const messagesRef = useRef<Anthropic.Messages.MessageParam[]>([]);
@@ -16,6 +42,11 @@ export default function VoyagerPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [toolUse, setToolUse] = useState<{
+    id: string;
+    toolName?: string;
+    toolInput?: unknown;
+  } | null>(null);
 
   const handleAddMessage = (message: Anthropic.Messages.MessageParam) => {
     messagesRef.current.push(message);
@@ -89,17 +120,8 @@ export default function VoyagerPage() {
                 break;
 
               case "content_block_start":
-                console.log("starting new content block");
-
                 currentContentBlock = data.content_block;
                 currentContentBlockContent = "";
-
-                // let variant: "code" | "text" = "text";
-                // if (data.content_block?.type === "text") {
-                //   currentContentBlockContent = data.content_block.text;
-                // } else if (data.content_block?.type === "tool_use") {
-                //   // variant = "code";
-                // }
 
                 setStreamingMessage((prev) => {
                   const newStreamingMessage = [...prev];
@@ -111,6 +133,14 @@ export default function VoyagerPage() {
                   newStreamingMessage.push(currentContentBlock);
                   return newStreamingMessage;
                 });
+
+                if (data.content_block.type === "tool_use") {
+                  setToolUse({
+                    id: data.content_block.id,
+                    toolName: data.content_block.name,
+                    toolInput: {},
+                  });
+                }
                 break;
 
               case "content_block_delta":
@@ -120,6 +150,20 @@ export default function VoyagerPage() {
                 } else if (data.delta?.type === "input_json_delta") {
                   currentContentBlockContent += data.delta.partial_json;
                 }
+
+                setToolUse((prev) => {
+                  if (
+                    !currentContentBlock ||
+                    currentContentBlock.type !== "tool_use"
+                  ) {
+                    return prev;
+                  }
+                  return {
+                    id: currentContentBlock.id,
+                    toolName: currentContentBlock.name,
+                    toolInput: bestEffortParse(currentContentBlockContent),
+                  };
+                });
 
                 // Cause a re-render
                 setStreamingMessage((prev) => {
@@ -213,13 +257,6 @@ export default function VoyagerPage() {
           }
         }
       }
-
-      // Handle tool use if returned from the streaming handler
-      // if (result?.type === "tool_use" && result.toolUse) {
-      //   await handleToolUse(result.toolUse);
-      // }
-
-      // TODO: handle tool use
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "An unknown error occurred"
@@ -288,32 +325,177 @@ export default function VoyagerPage() {
     }
   };
 
+  const clearToolUse = () => {
+    setToolUse(null);
+  };
+
+  const handleSetToolUse = (
+    id: string,
+    toolName?: string,
+    toolInput?: unknown
+  ) => {
+    if (toolName && toolInput) {
+      setToolUse({ id, toolName, toolInput });
+    } else {
+      setToolUse({ id });
+    }
+  };
+
+  const visibleToolUse = useMemo(() => {
+    if (!toolUse) {
+      return undefined;
+    }
+
+    if (toolUse.toolName) {
+      return {
+        id: toolUse.id,
+        toolName: toolUse.toolName,
+        toolInput: toolUse.toolInput,
+      };
+    }
+
+    const toolUseMessage = messagesRef.current.find(
+      (message) =>
+        Array.isArray(message.content) &&
+        message.content.find(
+          (content) => content.type === "tool_use" && content.id === toolUse.id
+        )
+    );
+
+    if (!toolUseMessage) {
+      return undefined;
+    }
+
+    const toolUseContent = Array.isArray(toolUseMessage.content)
+      ? toolUseMessage.content.find((content) => content.type === "tool_use")
+      : null;
+
+    if (!toolUseContent) {
+      return undefined;
+    }
+
+    return {
+      id: toolUseContent.id,
+      toolName: toolUseContent.name,
+      toolInput: toolUseContent.input,
+    };
+  }, [toolUse, streamingMessage, messages]);
+
+  const visibleToolResult = useMemo(() => {
+    if (!toolUse) {
+      return undefined;
+    }
+
+    const toolResultMessage = messagesRef.current.find(
+      (message) =>
+        Array.isArray(message.content) &&
+        message.content.find(
+          (content) =>
+            content.type === "tool_result" && content.tool_use_id === toolUse.id
+        )
+    );
+
+    if (toolResultMessage) {
+      const toolResultContent = Array.isArray(toolResultMessage.content)
+        ? toolResultMessage.content.find(
+            (content) => content.type === "tool_result"
+          )
+        : null;
+
+      if (!toolResultContent) {
+        return undefined;
+      }
+
+      try {
+        const output = JSON.parse(toolResultContent.content as string);
+        return JSON.stringify(output, null, 2);
+      } catch (e) {
+        return toolResultContent.content as string;
+      }
+    }
+  }, [toolUse, messages]);
+
   return (
-    <div className="flex flex-col w-full h-screen">
-      <div className="flex-1 overflow-auto p-4 pb-0 flex flex-col gap-4">
-        <MessageList
-          messages={messages}
-          streamingResponses={streamingMessage}
+    <ToolUseContext.Provider
+      value={{
+        toolUse,
+        setToolUse: handleSetToolUse,
+        clearToolUse,
+      }}
+    >
+      <div className="flex flex-col w-full h-screen">
+        <PanelGroup direction="horizontal">
+          <Panel defaultSize={70}>
+            <div className="flex-1 overflow-auto p-4 pb-0 flex flex-col gap-4 h-full">
+              <MessageList
+                messages={messages}
+                streamingResponses={streamingMessage}
+              />
+              <div ref={messagesEndRef} />
+            </div>
+          </Panel>
+          {visibleToolUse ? (
+            <>
+              <PanelResizeHandle />
+              <Panel defaultSize={30} className="border-l border-gray-300">
+                <PanelGroup direction="vertical">
+                  <Panel defaultSize={60}>
+                    <div className="overflow-auto flex flex-col h-full">
+                      <div className="flex flex-row gap-2 justify-between px-4 py-2 border-b border-gray-300">
+                        <div className="font-bold">
+                          Using tool: {visibleToolUse.toolName}
+                        </div>
+                        <button onClick={() => clearToolUse()}>Close</button>
+                      </div>
+                      {renderToolUse(
+                        visibleToolUse.toolName,
+                        visibleToolUse.toolInput
+                      )}
+                    </div>
+                  </Panel>
+                  {visibleToolResult ? (
+                    <>
+                      <PanelResizeHandle />
+                      <Panel
+                        defaultSize={40}
+                        className="flex flex-col border-t border-gray-300"
+                      >
+                        <div className="flex flex-row gap-2 justify-between px-4 py-2 border-b border-gray-300">
+                          <div className="font-bold">
+                            Tool result: {visibleToolUse.toolName}
+                          </div>
+                        </div>
+                        <CodeBlock
+                          code={visibleToolResult}
+                          language="json"
+                          className="p-4 overflow-auto h-full"
+                        />
+                      </Panel>
+                    </>
+                  ) : null}
+                </PanelGroup>
+              </Panel>
+            </>
+          ) : null}
+        </PanelGroup>
+
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            {error}
+          </div>
+        )}
+
+        <ChatInput
+          onSendMessage={(message) => {
+            handleAddMessage({
+              role: "user",
+              content: [{ type: "text", text: message }],
+            });
+            handleSendMessage();
+          }}
+          isLoading={isLoading}
         />
-        <div ref={messagesEndRef} />
       </div>
-
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
-        </div>
-      )}
-
-      <ChatInput
-        onSendMessage={(message) => {
-          handleAddMessage({
-            role: "user",
-            content: [{ type: "text", text: message }],
-          });
-          handleSendMessage();
-        }}
-        isLoading={isLoading}
-      />
-    </div>
+    </ToolUseContext.Provider>
   );
 }
