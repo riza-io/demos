@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import React, { useContext } from "react";
 import { ToolUseContext } from "../context";
 import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface MessageItemProps {
   message: Anthropic.Messages.MessageParam;
@@ -34,7 +35,7 @@ export default function MessageItem({ message }: MessageItemProps) {
         <div className={`${getRoleStyle(role)}`}>
           <div className="font-bold capitalize">{role}</div>
           <article className="prose !max-w-none">
-            <Markdown>{messageContent}</Markdown>
+            <Markdown remarkPlugins={[remarkGfm]}>{messageContent}</Markdown>
           </article>
         </div>
       );
@@ -45,7 +46,9 @@ export default function MessageItem({ message }: MessageItemProps) {
         <div className={`${getRoleStyle(role)}`}>
           <div className="font-bold capitalize">{role}</div>
           <article className="prose !max-w-none">
-            <Markdown>{messageContent.text}</Markdown>
+            <Markdown remarkPlugins={[remarkGfm]}>
+              {messageContent.text}
+            </Markdown>
           </article>
         </div>
       );
