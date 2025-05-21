@@ -89,9 +89,9 @@ export default function MessageItem({ message }: MessageItemProps) {
           {typeof messageContent.input === "string" ? (
             <div className="whitespace-pre-wrap">{messageContent.input}</div>
           ) : messageContent.name === "execute_function" &&
-            (messageContent.input?.code as any) ? (
+            (messageContent.input as any)?.code ? (
             <CodeBlock
-              code={messageContent.input?.code as any}
+              code={(messageContent.input as any).code}
               language="typescript"
             />
           ) : (

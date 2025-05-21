@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from "react";
 import ChatInput from "./components/ChatInput";
 import MessageList from "./components/MessageList";
-import Header from "./components/Header";
 import Anthropic from "@anthropic-ai/sdk";
 
 export default function VoyagerPage() {
