@@ -3,6 +3,7 @@ import { Highlight, themes } from "prism-react-renderer";
 
 type CodeDisplayProps = {
   language: string;
+  className?: string;
   code: string;
   size?: "small" | "medium";
   /** If true + used with a maxHeight, will pin scroll to bottom of div */
@@ -16,6 +17,7 @@ const CodeDisplay: React.FC<CodeDisplayProps> = ({
   size = "small",
   streaming = false,
   maxHeight,
+  className = "",
 }) => {
   const divRef = useRef<HTMLDivElement>(null);
 
@@ -30,7 +32,7 @@ const CodeDisplay: React.FC<CodeDisplayProps> = ({
     <div
       className={`grid overflow-auto font-mono ${
         size === "small" ? "text-xs" : "text-sm"
-      }`}
+      } ${className}`}
       style={{ gridTemplateColumns: "auto 1fr", maxHeight }}
       ref={divRef}
     >
