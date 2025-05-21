@@ -24,8 +24,14 @@ export default function VoyagerPage() {
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (messages.length > 0) {
+      messagesEndRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "start",
+      });
+    }
+  }, [messages, streamingMessage[streamingMessage.length - 1]]);
 
   const handleSendMessage = async () => {
     setIsLoading(true);
@@ -284,7 +290,7 @@ export default function VoyagerPage() {
 
   return (
     <div className="flex flex-col w-full h-screen">
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-auto p-4 pb-0 flex flex-col gap-4">
         <MessageList
           messages={messages}
           streamingResponses={streamingMessage}
