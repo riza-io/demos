@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import MessageItem from "./MessageItem";
+import React from "react";
 
 interface MessageListProps {
   messages: Anthropic.Messages.MessageParam[];
@@ -18,12 +19,21 @@ export default function MessageList({
     );
   }
 
+  const isStreaming = streamingResponses.length > 0;
+
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       {messages.map((message, index) => {
-        return <MessageItem key={index} message={message} />;
+        return (
+          <React.Fragment key={index}>
+            <MessageItem message={message} />
+            {index < messages.length - 1 || isStreaming ? (
+              <div className="border-b border-gray-300"></div>
+            ) : null}
+          </React.Fragment>
+        );
       })}
-      {streamingResponses.length > 0 && (
+      {isStreaming && (
         <>
           <MessageItem
             key={messages.length}
