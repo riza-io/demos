@@ -1,69 +1,38 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { ChatMessage, MessageType, ToolUseMessage } from "./types";
 import ChatInput from "./components/ChatInput";
 import MessageList from "./components/MessageList";
 import Header from "./components/Header";
 import Anthropic from "@anthropic-ai/sdk";
 
 export default function VoyagerPage() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const messagesRef = useRef<Anthropic.Messages.MessageParam[]>([]);
+  const [messages, setMessages] = useState<Anthropic.Messages.MessageParam[]>(
+    []
+  );
+  const [streamingMessage, setStreamingMessage] = useState<
+    Anthropic.ContentBlock[]
+  >([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const handleAddMessage = (message: Anthropic.Messages.MessageParam) => {
+    messagesRef.current.push(message);
+    setMessages((prev) => [...prev, message]);
+  };
 
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSendMessage = async (
-    message: string,
-    type: "text" | "tool_result" = "text"
-  ) => {
-    if (!message.trim()) return;
-
+  const handleSendMessage = async () => {
     setIsLoading(true);
     setError(null);
 
-    // Add user message to chat
-    let userMessage: ChatMessage;
-    if (type === "text") {
-      userMessage = {
-        id: Date.now().toString(),
-        role: "user",
-        content: message,
-        type: "text",
-        variant: "text",
-      };
-    } else {
-      userMessage = {
-        id: Date.now().toString(),
-        role: "user",
-        type: "tool_result",
-        tool: {
-          name: "tool_result",
-          output: message,
-        },
-      };
-    }
-
-    setMessages((prev) => [...prev, userMessage]);
-
     try {
-      // Create assistant message placeholder
-      // const assistantMessageId = (Date.now() + 1).toString();
-      // const assistantMessage: ChatMessage = {
-      //   id: assistantMessageId,
-      //   role: "assistant",
-      //   content: "",
-      //   type: "text",
-      //   variant: "text",
-      // };
-
-      // setMessages((prev) => [...prev, assistantMessage]);
-
       // Send request to API
       const response = await fetch("/api/voyager/chat", {
         method: "POST",
@@ -71,8 +40,7 @@ export default function VoyagerPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          history: messages,
-          message,
+          history: messagesRef.current,
         }),
       });
 
@@ -84,9 +52,6 @@ export default function VoyagerPage() {
       const reader = response.body.getReader();
 
       // Process the streaming response
-      // let result: { type?: string; toolUse?: any } = {};
-      // let currentAssistantMessage = "";
-      // let currentToolUse: any = null;
       let isProcessing = true;
 
       let currentContentBlock: Anthropic.ContentBlock | null = null;
@@ -124,30 +89,22 @@ export default function VoyagerPage() {
                 currentContentBlock = data.content_block;
                 currentContentBlockContent = "";
 
-                let variant: "code" | "text" = "text";
-                if (data.content_block?.type === "text") {
-                  currentContentBlockContent = data.content_block.text;
-                } else if (data.content_block?.type === "tool_use") {
-                  variant = "code";
-                }
+                // let variant: "code" | "text" = "text";
+                // if (data.content_block?.type === "text") {
+                //   currentContentBlockContent = data.content_block.text;
+                // } else if (data.content_block?.type === "tool_use") {
+                //   // variant = "code";
+                // }
 
-                setMessages((prev) => {
-                  const newMsgs = [...prev];
+                setStreamingMessage((prev) => {
+                  const newStreamingMessage = [...prev];
 
-                  if (!currentMessage) {
-                    throw new Error("No message found");
+                  if (!currentContentBlock) {
+                    throw new Error("No content block found");
                   }
 
-                  // treat all messages as text while streaming
-                  newMsgs.push({
-                    id: currentMessage.id,
-                    role: currentMessage.role,
-                    content: currentContentBlockContent,
-                    type: "text",
-                    variant,
-                  });
-
-                  return newMsgs;
+                  newStreamingMessage.push(currentContentBlock);
+                  return newStreamingMessage;
                 });
                 break;
 
@@ -160,18 +117,22 @@ export default function VoyagerPage() {
                 }
 
                 // Cause a re-render
-                setMessages((prev) => {
+                setStreamingMessage((prev) => {
                   const newMsgs = [...prev];
 
                   const lastMsg = newMsgs[newMsgs.length - 1];
-                  if (lastMsg.type !== "text") {
-                    throw new Error("Last message is not a text message");
-                  }
 
-                  newMsgs[newMsgs.length - 1] = {
-                    ...lastMsg,
-                    content: currentContentBlockContent,
-                  };
+                  if (lastMsg.type === "text") {
+                    newMsgs[newMsgs.length - 1] = {
+                      ...lastMsg,
+                      text: currentContentBlockContent,
+                    };
+                  } else if (lastMsg.type === "tool_use") {
+                    newMsgs[newMsgs.length - 1] = {
+                      ...lastMsg,
+                      input: currentContentBlockContent,
+                    };
+                  }
 
                   return newMsgs;
                 });
@@ -179,15 +140,31 @@ export default function VoyagerPage() {
 
               case "message_delta":
                 if (data.delta?.stop_reason === "tool_use") {
-                  // tool use json is the last message content
-                  const toolUseJSON = JSON.parse(currentContentBlockContent);
+                  if (!currentMessage) {
+                    throw new Error("No message found");
+                  }
 
-                  setMessages((prev) => {
+                  const newMessage: Anthropic.Message = {
+                    ...currentMessage,
+                    ...data.delta,
+                  };
+
+                  currentMessage = newMessage;
+
+                  if (currentContentBlock?.type === "tool_use") {
+                    handleToolUse(currentContentBlock);
+                  }
+                }
+                break;
+
+              case "content_block_stop":
+                if (currentContentBlock?.type === "tool_use") {
+                  currentContentBlock.input = JSON.parse(
+                    currentContentBlockContent
+                  );
+
+                  setStreamingMessage((prev) => {
                     const newMsgs = [...prev];
-
-                    if (!currentMessage) {
-                      throw new Error("No message found");
-                    }
 
                     if (currentContentBlock?.type !== "tool_use") {
                       throw new Error(
@@ -195,32 +172,34 @@ export default function VoyagerPage() {
                       );
                     }
 
-                    const toolUseMessage: ToolUseMessage = {
-                      id: currentMessage.id,
-                      role: currentMessage.role,
-                      type: "tool_use",
-                      tool: {
-                        id: currentContentBlock.id,
-                        name: currentContentBlock.name,
-                        input: toolUseJSON,
-                      },
-                    };
+                    newMsgs[newMsgs.length - 1] = currentContentBlock;
 
-                    newMsgs.push(toolUseMessage);
                     return newMsgs;
                   });
-
-                  if (currentContentBlock?.type === "tool_use") {
-                    handleToolUse({
-                      id: currentContentBlock.id,
-                      name: currentContentBlock.name,
-                      input: toolUseJSON,
-                    });
-                  }
+                } else if (currentContentBlock?.type === "text") {
+                  currentContentBlock.text = currentContentBlockContent;
+                } else {
+                  throw new Error(
+                    `Unsupported content block type: ${currentContentBlock?.type}`
+                  );
                 }
+
+                if (!currentMessage || !currentContentBlock) {
+                  throw new Error("No message or content block found");
+                }
+
+                currentMessage.content.push(currentContentBlock);
                 break;
 
               case "message_stop":
+                setStreamingMessage([]);
+
+                if (!currentMessage) {
+                  throw new Error("No message found");
+                }
+
+                handleAddMessage(currentMessage);
+
                 isProcessing = false;
                 break;
             }
@@ -245,27 +224,10 @@ export default function VoyagerPage() {
     }
   };
 
-  const handleToolUse = async (toolUse: {
-    id: string;
-    name: string;
-    input: Record<string, any>;
-  }) => {
-    console.log("handleToolUse", toolUse);
+  const handleToolUse = async (toolUse: Anthropic.Messages.ToolUseBlock) => {
+    const toolUseJSON = toolUse.input as Record<string, any>;
+
     try {
-      // Add tool use message to chat
-      const toolUseMessage: ChatMessage = {
-        id: Date.now().toString(),
-        role: "assistant",
-        type: "tool_use",
-        tool: {
-          id: toolUse.id,
-          name: toolUse.name,
-          input: toolUse.input,
-        },
-      };
-
-      setMessages((prev) => [...prev, toolUseMessage]);
-
       // Execute the function
       const response = await fetch("/api/voyager/execute", {
         method: "POST",
@@ -273,8 +235,8 @@ export default function VoyagerPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          code: toolUse.input.code,
-          input: toolUse.input.input,
+          code: toolUseJSON.code,
+          input: toolUseJSON.input,
         }),
       });
 
@@ -285,36 +247,39 @@ export default function VoyagerPage() {
       const result = await response.json();
 
       // Add tool result message to chat
-      const toolResultMessage: ChatMessage = {
-        id: Date.now().toString(),
-        role: "tool",
-        type: "tool_result",
-        tool: {
-          name: toolUse.id,
-          output: JSON.stringify(result.output),
-        },
+      const toolResultMessage: Anthropic.Messages.MessageParam = {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: toolUse.id,
+            content: JSON.stringify(result.output),
+          },
+        ],
       };
 
-      setMessages((prev) => [...prev, toolResultMessage]);
-
-      handleSendMessage(toolResultMessage.tool.output, "tool_result");
+      handleAddMessage(toolResultMessage);
+      handleSendMessage();
     } catch (err) {
       console.error("Error executing function:", err);
 
       // Add error message as tool result
-      const errorMessage: ChatMessage = {
-        id: Date.now().toString(),
-        role: "tool",
-        type: "tool_result",
-        tool: {
-          name: toolUse.id,
-          output: JSON.stringify({
-            error: err instanceof Error ? err.message : "Unknown error",
-          }),
-        },
+      const errorMessage: Anthropic.Messages.MessageParam = {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: toolUse.id,
+            content: JSON.stringify({
+              error: err instanceof Error ? err.message : "Unknown error",
+            }),
+            is_error: true,
+          },
+        ],
       };
 
-      setMessages((prev) => [...prev, errorMessage]);
+      handleAddMessage(errorMessage);
+      handleSendMessage();
     }
   };
 
@@ -323,7 +288,10 @@ export default function VoyagerPage() {
       <Header />
 
       <div className="flex-1 overflow-auto mb-4 border border-gray-200 rounded-md p-4">
-        <MessageList messages={messages} />
+        <MessageList
+          messages={messages}
+          streamingResponses={streamingMessage}
+        />
         <div ref={messagesEndRef} />
       </div>
 
@@ -333,7 +301,16 @@ export default function VoyagerPage() {
         </div>
       )}
 
-      <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
+      <ChatInput
+        onSendMessage={(message) => {
+          handleAddMessage({
+            role: "user",
+            content: [{ type: "text", text: message }],
+          });
+          handleSendMessage();
+        }}
+        isLoading={isLoading}
+      />
     </div>
   );
 }

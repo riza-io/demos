@@ -1,11 +1,14 @@
-import { ChatMessage } from "../types";
+import Anthropic from "@anthropic-ai/sdk";
 import CodeBlock from "./CodeBlock";
+import React from "react";
 
 interface MessageItemProps {
-  message: ChatMessage;
+  message: Anthropic.Messages.MessageParam;
 }
 
 export default function MessageItem({ message }: MessageItemProps) {
+  const { role, content } = message;
+
   const getRoleStyle = (role: string) => {
     switch (role) {
       case "user":
@@ -19,29 +22,40 @@ export default function MessageItem({ message }: MessageItemProps) {
     }
   };
 
-  const renderMessageContent = () => {
-    if (message.type === "text") {
-      return <div className="whitespace-pre-wrap">{message.content}</div>;
-    } else if (message.type === "tool_use") {
+  const renderMessageContent = (
+    messageContent: string | Anthropic.Messages.ContentBlockParam
+  ) => {
+    if (typeof messageContent === "string") {
+      return <div className="whitespace-pre-wrap">{messageContent}</div>;
+    }
+
+    if (messageContent.type === "text") {
+      return <div className="whitespace-pre-wrap">{messageContent.text}</div>;
+    } else if (messageContent.type === "tool_use") {
       return (
         <div>
           <div className="font-semibold mb-2">
-            Using tool: {message.tool.name}
+            Using tool: {messageContent.name}
           </div>
           <div className="mb-2">Input:</div>
-          {message.tool.name === "execute_function" &&
-          message.tool.input.code ? (
-            <CodeBlock code={message.tool.input.code} language="typescript" />
+          {typeof messageContent.input === "string" ? (
+            <div className="whitespace-pre-wrap">{messageContent.input}</div>
+          ) : messageContent.name === "execute_function" &&
+            (messageContent.input?.code as any) ? (
+            <CodeBlock
+              code={messageContent.input?.code as any}
+              language="typescript"
+            />
           ) : (
             <pre className="bg-gray-800 text-white p-3 rounded overflow-auto">
-              {JSON.stringify(message.tool.input, null, 2)}
+              {JSON.stringify(messageContent.input, null, 2)}
             </pre>
           )}
         </div>
       );
-    } else if (message.type === "tool_result") {
+    } else if (messageContent.type === "tool_result") {
       try {
-        const output = JSON.parse(message.tool.output);
+        const output = JSON.parse(messageContent.content as string);
         return (
           <div>
             <div className="font-semibold mb-2">Tool result:</div>
@@ -51,20 +65,21 @@ export default function MessageItem({ message }: MessageItemProps) {
           </div>
         );
       } catch (e) {
-        return (
-          <div>
-            <div className="font-semibold mb-2">Tool result:</div>
-            <div>{message.tool.output}</div>
-          </div>
-        );
+        return <div>Unable to render message content</div>;
       }
     }
   };
 
   return (
-    <div className={`p-4 rounded-lg ${getRoleStyle(message.role)}`}>
-      <div className="font-bold mb-2 capitalize">{message.role}</div>
-      {renderMessageContent()}
+    <div className={`p-4 rounded-lg ${getRoleStyle(role)}`}>
+      <div className="font-bold mb-2 capitalize">{role}</div>
+      {typeof content === "string"
+        ? renderMessageContent(content)
+        : content.map((contentBlock, index) => (
+            <React.Fragment key={index}>
+              {renderMessageContent(contentBlock)}
+            </React.Fragment>
+          ))}
     </div>
   );
 }
