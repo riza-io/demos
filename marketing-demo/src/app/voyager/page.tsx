@@ -284,10 +284,8 @@ export default function VoyagerPage() {
   };
 
   return (
-    <div className="flex flex-col h-screen max-w-4xl mx-auto p-4">
-      <Header />
-
-      <div className="flex-1 overflow-auto mb-4 border border-gray-200 rounded-md p-4">
+    <div className="flex flex-col w-full h-screen">
+      <div className="flex-1 overflow-auto p-4">
         <MessageList
           messages={messages}
           streamingResponses={streamingMessage}
