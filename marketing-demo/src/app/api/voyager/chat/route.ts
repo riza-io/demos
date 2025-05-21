@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getCORSHeaders } from "@/cors";
-import { MessageParam } from "@anthropic-ai/sdk/resources/messages.mjs";
-import { ChatRequest, ChatRequestSchema } from "./types";
+import { ChatRequestSchema } from "./types";
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -35,6 +34,8 @@ You have access to the following API keys as environment variables:
 There may not be a single API endpoint that serves the needs of your code. Your code may require chaining multiple HTTP requests to different API endpoints, for example: querying an API to get the ID of a resource before using it in another request; querying an API to get the schema of a resource before using it in another request.
 
 GET requests cannot have request bodies. You should use URL query parameters to pass request data in GET requests.
+
+If you encounter unix timestamps, you should write code to parse them into ISO formatted strings for easier parsing.
 
 Your code should return JSON objects rather than strings.
 `;
