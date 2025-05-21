@@ -51,47 +51,6 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { history } = ChatRequestSchema.parse(body);
 
-    // Convert our internal message format to Anthropic's format
-    // const messages: MessageParam[] = [];
-
-    // Process history to create the proper message sequence
-    // for (let i = 0; i < history.length; i++) {
-    //   const msg = history[i];
-
-    //   console.log("msg", msg);
-
-    //   if (msg.type === "text") {
-    //     messages.push({
-    //       role: msg.role,
-    //       content: msg.content,
-    //     });
-    //   } else if (msg.type === "tool_use") {
-    //     const toolUseContent: Anthropic.ToolUseBlockParam = {
-    //       type: "tool_use",
-    //       id: msg.tool.id,
-    //       input: msg.tool.input,
-    //       name: msg.tool.name,
-    //     };
-    //     const toolUseMessage: MessageParam = {
-    //       role: msg.role,
-    //       content: [toolUseContent],
-    //     };
-
-    //     messages.push(toolUseMessage);
-    //   } else if (msg.type === "tool_result") {
-    //     // Tool responses need to be formatted according to Anthropic's API
-    //     const toolResultContent: Anthropic.ToolResultBlockParam = {
-    //       type: "tool_result",
-    //       tool_use_id: msg.tool.id,
-    //       content: msg.tool.output,
-    //     };
-    //     messages.push({
-    //       role: "assistant",
-    //       content: [toolResultContent],
-    //     });
-    //   }
-    // }
-
     // Create a streaming response from Anthropic
     const stream = anthropic.messages.stream({
       model: "claude-3-7-sonnet-latest",
