@@ -26,7 +26,6 @@ export default function ChatInput({
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         placeholder="Ask me to do something..."
-        disabled={isLoading}
         className="flex-1 p-4 focus:outline-none"
       />
       <button
