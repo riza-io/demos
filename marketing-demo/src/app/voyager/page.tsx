@@ -22,6 +22,7 @@ const renderToolUse = (toolName: string, toolInput: unknown) => {
         code={toolInput.code}
         language="typescript"
         className="p-4"
+        streaming
       />
     );
   }
@@ -360,6 +361,7 @@ export default function VoyagerPage() {
       return undefined;
     }
 
+    // if toolUse is fully set, then we return the toolUse
     if (toolUse.toolName) {
       return {
         id: toolUse.id,
@@ -368,6 +370,7 @@ export default function VoyagerPage() {
       };
     }
 
+    // otherwise, if only toolUse.id is set, then we need to find the tool use from the message history
     const toolUseMessage = messagesRef.current.find(
       (message) =>
         Array.isArray(message.content) &&
@@ -454,7 +457,7 @@ export default function VoyagerPage() {
               <Panel defaultSize={30} className="border-l border-gray-300">
                 <PanelGroup direction="vertical">
                   <Panel defaultSize={60}>
-                    <div className="overflow-auto flex flex-col h-full">
+                    <div className="flex flex-col max-h-full">
                       <div className="flex flex-row gap-2 justify-between px-4 py-2 border-b border-gray-300">
                         <div className="font-bold">
                           Using tool: {visibleToolUse.toolName}
@@ -482,7 +485,7 @@ export default function VoyagerPage() {
                         <CodeBlock
                           code={visibleToolResult}
                           language="json"
-                          className="p-4 overflow-auto h-full"
+                          className="p-4 overflow-auto"
                         />
                       </Panel>
                     </>

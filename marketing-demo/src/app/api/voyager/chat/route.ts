@@ -35,7 +35,11 @@ There may not be a single API endpoint that serves the needs of your code. Your 
 
 GET requests cannot have request bodies. You should use URL query parameters to pass request data in GET requests.
 
-If you encounter unix timestamps, you should write code to parse them into ISO formatted strings for easier parsing.
+If you encounter unix timestamps, you should write code to parse them into ISO formatted strings in the Pacific Timezone so they are more human readable. You cannot use the Intl API.
+
+Keep in mind what you know about pagination in the APIs you are accessing.
+
+When responding to the user, you may use GitHub Flavored Markdown.
 
 Your code should return JSON objects rather than strings.
 `;
