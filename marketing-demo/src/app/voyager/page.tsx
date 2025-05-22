@@ -46,6 +46,7 @@ export default function VoyagerPage() {
     id: string;
     toolName?: string;
     toolInput?: unknown;
+    toolInputPartialJson?: string;
   } | null>(null);
 
   const handleAddMessage = (message: Anthropic.Messages.MessageParam) => {
@@ -161,7 +162,8 @@ export default function VoyagerPage() {
                   return {
                     id: currentContentBlock.id,
                     toolName: currentContentBlock.name,
-                    toolInput: bestEffortParse(currentContentBlockContent),
+                    toolInput: null,
+                    toolInputPartialJson: currentContentBlockContent,
                   };
                 });
 
@@ -265,6 +267,18 @@ export default function VoyagerPage() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (toolUse?.toolInputPartialJson) {
+      const parsed = bestEffortParse(toolUse.toolInputPartialJson);
+      setToolUse((prev) => {
+        if (!prev) {
+          return prev;
+        }
+        return { ...prev, toolInput: parsed };
+      });
+    }
+  }, [toolUse?.toolInputPartialJson]);
 
   const handleToolUse = async (toolUse: Anthropic.Messages.ToolUseBlock) => {
     const toolUseJSON = toolUse.input as Record<string, any>;
