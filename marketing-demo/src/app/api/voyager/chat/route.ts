@@ -58,7 +58,7 @@ export async function POST(request: Request) {
 
     // Create a streaming response from Anthropic
     const stream = anthropic.messages.stream({
-      model: "claude-3-7-sonnet-latest",
+      model: "claude-4-sonnet-20250514",
       max_tokens: 10000,
       messages: history as any,
       system: SYSTEM_PROMPT,
