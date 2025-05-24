@@ -9,6 +9,7 @@ import { ToolUseContext } from "./context";
 import CodeDisplay from "./components/CodeBlock";
 import CodeBlock from "./components/CodeBlock";
 import { parse as bestEffortParse } from "best-effort-json-parser";
+import Loader from "./components/Loader";
 
 const renderToolUse = (toolName: string, toolInput: unknown) => {
   if (
@@ -43,6 +44,7 @@ export default function VoyagerPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isPinned, setIsPinned] = useState(true);
   const [toolUse, setToolUse] = useState<{
     id: string;
     toolName?: string;
@@ -57,14 +59,14 @@ export default function VoyagerPage() {
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    if (messages.length > 0) {
+    if (isPinned && messages.length > 0) {
       messagesEndRef.current?.scrollIntoView({
         behavior: "smooth",
         block: "nearest",
         inline: "start",
       });
     }
-  }, [messages, streamingMessage[streamingMessage.length - 1]]);
+  }, [messages, streamingMessage[streamingMessage.length - 1], isPinned]);
 
   const handleSendMessage = async () => {
     setIsLoading(true);
@@ -361,12 +363,13 @@ export default function VoyagerPage() {
       return undefined;
     }
 
-    // if toolUse is fully set, then we return the toolUse
+    // if toolUse is fully set, then we return the toolUse since this is streaming
     if (toolUse.toolName) {
       return {
         id: toolUse.id,
         toolName: toolUse.toolName,
         toolInput: toolUse.toolInput,
+        streaming: true,
       };
     }
 
@@ -459,9 +462,10 @@ export default function VoyagerPage() {
                   <Panel defaultSize={60}>
                     <div className="flex flex-col max-h-full">
                       <div className="flex flex-row gap-2 justify-between px-4 py-2 border-b border-gray-300">
-                        <div className="font-bold">
+                        <div className="font-bold flex-1">
                           Using tool: {visibleToolUse.toolName}
                         </div>
+                        {visibleToolUse.streaming ? <Loader /> : null}
                         <button onClick={() => clearToolUse()}>Close</button>
                       </div>
                       {renderToolUse(
@@ -511,6 +515,8 @@ export default function VoyagerPage() {
             handleSendMessage();
           }}
           isLoading={isLoading}
+          isPinned={isPinned}
+          setIsPinned={setIsPinned}
         />
       </div>
     </ToolUseContext.Provider>
