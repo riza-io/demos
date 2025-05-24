@@ -47,9 +47,6 @@ export default function VoyagerPage() {
   const [isPinned, setIsPinned] = useState(true);
   const [toolUse, setToolUse] = useState<{
     id: string;
-    toolName?: string;
-    toolInput?: unknown;
-    toolInputPartialJson?: string;
   } | null>(null);
 
   const handleAddMessage = (message: Anthropic.Messages.MessageParam) => {
@@ -141,8 +138,6 @@ export default function VoyagerPage() {
                 if (data.content_block.type === "tool_use") {
                   setToolUse({
                     id: data.content_block.id,
-                    toolName: data.content_block.name,
-                    toolInput: {},
                   });
                 }
                 break;
@@ -154,21 +149,6 @@ export default function VoyagerPage() {
                 } else if (data.delta?.type === "input_json_delta") {
                   currentContentBlockContent += data.delta.partial_json;
                 }
-
-                setToolUse((prev) => {
-                  if (
-                    !currentContentBlock ||
-                    currentContentBlock.type !== "tool_use"
-                  ) {
-                    return prev;
-                  }
-                  return {
-                    id: currentContentBlock.id,
-                    toolName: currentContentBlock.name,
-                    toolInput: null,
-                    toolInputPartialJson: currentContentBlockContent,
-                  };
-                });
 
                 // Cause a re-render
                 setStreamingMessage((prev) => {
@@ -184,7 +164,7 @@ export default function VoyagerPage() {
                   } else if (lastMsg.type === "tool_use") {
                     newMsgs[newMsgs.length - 1] = {
                       ...lastMsg,
-                      input: currentContentBlockContent,
+                      input: bestEffortParse(currentContentBlockContent),
                     };
                   }
 
@@ -271,18 +251,6 @@ export default function VoyagerPage() {
     }
   };
 
-  useEffect(() => {
-    if (toolUse?.toolInputPartialJson) {
-      const parsed = bestEffortParse(toolUse.toolInputPartialJson);
-      setToolUse((prev) => {
-        if (!prev) {
-          return prev;
-        }
-        return { ...prev, toolInput: parsed };
-      });
-    }
-  }, [toolUse?.toolInputPartialJson]);
-
   const handleToolUse = async (toolUse: Anthropic.Messages.ToolUseBlock) => {
     const toolUseJSON = toolUse.input as Record<string, any>;
 
@@ -346,16 +314,8 @@ export default function VoyagerPage() {
     setToolUse(null);
   };
 
-  const handleSetToolUse = (
-    id: string,
-    toolName?: string,
-    toolInput?: unknown
-  ) => {
-    if (toolName && toolInput) {
-      setToolUse({ id, toolName, toolInput });
-    } else {
-      setToolUse({ id });
-    }
+  const handleSetToolUse = (id: string) => {
+    setToolUse({ id });
   };
 
   const visibleToolUse = useMemo(() => {
@@ -363,17 +323,20 @@ export default function VoyagerPage() {
       return undefined;
     }
 
-    // if toolUse is fully set, then we return the toolUse since this is streaming
-    if (toolUse.toolName) {
+    // first check if this tool use id is being actively streamed
+    const streamingToolUse = streamingMessage.find(
+      (msg) => msg.type === "tool_use" && msg.id === toolUse.id
+    );
+    if (streamingToolUse && streamingToolUse.type === "tool_use") {
       return {
         id: toolUse.id,
-        toolName: toolUse.toolName,
-        toolInput: toolUse.toolInput,
+        toolName: streamingToolUse.name,
+        toolInput: streamingToolUse.input,
         streaming: true,
       };
     }
 
-    // otherwise, if only toolUse.id is set, then we need to find the tool use from the message history
+    // otherwise, we need to find the tool use from the message history
     const toolUseMessage = messagesRef.current.find(
       (message) =>
         Array.isArray(message.content) &&
@@ -400,6 +363,8 @@ export default function VoyagerPage() {
       toolInput: toolUseContent.input,
     };
   }, [toolUse, streamingMessage, messages]);
+
+  console.log("visibleToolUse", visibleToolUse);
 
   const visibleToolResult = useMemo(() => {
     if (!toolUse) {
@@ -461,7 +426,7 @@ export default function VoyagerPage() {
                 <PanelGroup direction="vertical">
                   <Panel defaultSize={60}>
                     <div className="flex flex-col max-h-full">
-                      <div className="flex flex-row gap-2 justify-between px-4 py-2 border-b border-gray-300">
+                      <div className="flex flex-row gap-4 justify-between px-4 py-2 border-b border-gray-300 items-center">
                         <div className="font-bold flex-1">
                           Using tool: {visibleToolUse.toolName}
                         </div>

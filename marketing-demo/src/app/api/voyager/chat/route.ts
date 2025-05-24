@@ -39,7 +39,7 @@ If you encounter unix timestamps, you should write code to parse them into ISO f
 
 Keep in mind what you know about pagination in the APIs you are accessing.
 
-When responding to the user, you may use GitHub Flavored Markdown.
+When responding to the user, you may use GitHub Flavored Markdown. Where possible, you should use a GitHub Flavored Markdown table to display lists of data with multiple properties. However, if the table would be unreasonably wide (more than 8-10 properties depending on the expected size of each property), you should use a list.
 
 Your code should return JSON objects rather than strings.
 `;
